@@ -1,3 +1,6 @@
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -24,7 +27,7 @@ import time
 import threading
 import logging
 import inspect
-from Queue import Queue, Empty
+from queue import Queue, Empty
 
 class MsgQueueEmptyException(Exception):
     pass
@@ -46,7 +49,7 @@ class Ribbon(threading.Thread):
             for r in cls.__ribbons:
                 r.stop()
 
-        for i in xrange(int(timeout)):
+        for i in range(int(timeout)):
             alive = False
 
             with cls.__lock:
@@ -114,7 +117,7 @@ class Ribbon(threading.Thread):
             method_args = argspec.args[1:]
             defaults = argspec.defaults
             method_kwargs = {}
-            for i in xrange(len(method_args)):
+            for i in range(len(method_args)):
                 try:
                     method_kwargs[method_args[i]] = defaults[i]
 
@@ -123,7 +126,7 @@ class Ribbon(threading.Thread):
                     raise PositionalArgumentsNotSupported
 
             # now, override method kwargs
-            for k, v in self._kwargs.iteritems():
+            for k, v in self._kwargs.items():
                 if k in method_kwargs:
                     method_kwargs[k] = v
 
@@ -225,7 +228,7 @@ class Ribbon(threading.Thread):
 
         qsize = self.queue.qsize()
 
-        for i in xrange(qsize):
+        for i in range(qsize):
             msgs.append(self.queue.get())
 
         return msgs

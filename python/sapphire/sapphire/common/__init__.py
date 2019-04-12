@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 #
 # <license>
 # 
@@ -22,7 +23,7 @@
 # </license>
 #
 
-from app import *
-from ribbon import *
-from fnmatch2 import *
-import util
+from .app import *
+from .ribbon import *
+from .fnmatch2 import *
+from . import util

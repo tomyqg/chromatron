@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 #
 # <license>
 # 
@@ -22,4 +23,4 @@
 # </license>
 #
 
-from query import *
+from .query import *

@@ -1,3 +1,10 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import input
+from builtins import str
+from builtins import object
 #
 # <license>
 # 
@@ -35,21 +42,21 @@ import crcmod
 import struct
 import argparse
 import hashlib
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import tarfile
 import zipfile
 from datetime import datetime
 import hashlib
 import zipfile
-import ConfigParser
+import configparser
 from pprint import pprint
-import firmware_package
+from . import firmware_package
 
-import settings
+from . import settings
 
 from intelhex import IntelHex
 
-import global_settings
+from . import global_settings
 
 from sapphire.devices.sapphiredata import KVMetaField, KVMetaFieldWidePtr
 from sapphire.common import util
@@ -126,7 +133,7 @@ def get_tools():
     os.chdir(TOOLS_DIR)
 
     for tool in build_tool_archives[sys.platform]:
-        urllib.URLopener().retrieve(tool[0] + tool[1], tool[1])
+        urllib.request.URLopener().retrieve(tool[0] + tool[1], tool[1])
 
         if tool[1].endswith('.tar.bz2'):
             tar = tarfile.open(tool[1])
@@ -280,7 +287,7 @@ class Builder(object):
         settings = self._get_default_settings()
 
         # override defaults with app settings
-        for k, v in app_settings.iteritems():
+        for k, v in app_settings.items():
             if k == "LIBRARIES":
                 settings[k].extend(v)
 
@@ -565,7 +572,7 @@ class Builder(object):
         # get KV hashes and add to defines
         hashes = self.create_kv_hashes()
 
-        for k, v in hashes.iteritems():
+        for k, v in hashes.items():
             self.defines.append('%s=((catbus_hash_t32)%s)' % (k, v))
 
         # self.settings["C_FLAGS"].append('-fdollars-in-identifiers')
@@ -586,7 +593,7 @@ class Builder(object):
     def build_libs(self):
         libs = self.get_libraries()
 
-        for lib, builder in libs.iteritems():
+        for lib, builder in libs.items():
             logging.info("Building library %s" % (lib))
         
             builder.clean()
@@ -1303,12 +1310,12 @@ def get_build_configs():
     for filename in os.listdir(BUILD_CONFIGS_DIR):
         filepath = os.path.join(BUILD_CONFIGS_DIR, filename)
         
-        configparser = ConfigParser.SafeConfigParser()
+        configparser = configparser.SafeConfigParser()
 
         try:
             configparser.read(filepath)
 
-        except ConfigParser.MissingSectionHeaderError:
+        except configparser.MissingSectionHeaderError:
             continue
 
         for section in configparser.sections():
@@ -1320,13 +1327,13 @@ def get_build_configs():
                 try:
                     full_name   = configparser.get(section, 'full_name')
 
-                except ConfigParser.NoOptionError:
+                except configparser.NoOptionError:
                     full_name   = proj_name                
 
                 try:
                     libs        = configparser.get(section, 'libs').split(',')
 
-                except ConfigParser.NoOptionError:
+                except configparser.NoOptionError:
                     libs = []
 
                 # trim whitespace
@@ -1340,7 +1347,7 @@ def get_build_configs():
                 if proj_name not in fwids:
                     fwids[proj_name] = str(uuid.uuid4())
 
-                    print "Created FWID %s for project: %s" % (fwids[proj_name], proj_name)
+                    print("Created FWID %s for project: %s" % (fwids[proj_name], proj_name))
                     
                     # save to file
                     with open(BUILD_CONFIGS_FWID_FILE, 'w+') as f:
@@ -1353,7 +1360,7 @@ def get_build_configs():
                                             'BASE_PROJ': base_proj,
                                             'LIBS': libs}
 
-            except ConfigParser.NoOptionError:
+            except configparser.NoOptionError:
                 pass
 
 
@@ -1416,7 +1423,7 @@ def get_project_builder(proj_name=None, fwid=None, target=None, build_loader=Fal
             # return Builder(projects[proj_name], target_type=target)
 
         elif fwid:
-            for k, v in projects.iteritems():
+            for k, v in projects.items():
                 try:
                     builder = get_project_builder(k, target=target)
 
@@ -1537,16 +1544,16 @@ def main():
         # get current packages
         releases = firmware_package.get_releases()
 
-        release_name = raw_input("Enter release name: ")
+        release_name = input("Enter release name: ")
 
         # check if we already have this release
         if release_name in releases:
-            print "This release already exists."
+            print("This release already exists.")
 
-            overwrite = raw_input("Enter 'overwrite' to overwrite this release: ")
+            overwrite = input("Enter 'overwrite' to overwrite this release: ")
 
             if overwrite != 'overwrite':
-                print "Release cancelled"
+                print("Release cancelled")
                 return
 
             # erase original release
@@ -1572,7 +1579,7 @@ def main():
         projects = get_project_list()
 
         for key in projects:
-            print "%20s %s" % (key, projects[key])
+            print("%20s %s" % (key, projects[key]))
 
         return
 
@@ -1621,8 +1628,8 @@ def main():
         with open(PROJECTS_FILE, 'w+') as f:
             f.write(json.dumps(projects))
 
-        print "Found %d projects" % (len(projects))
-        print "Saved project file: %s" % (PROJECTS_FILE)
+        print("Found %d projects" % (len(projects)))
+        print("Saved project file: %s" % (PROJECTS_FILE))
 
 
         return
@@ -1654,7 +1661,7 @@ def main():
     if args["build_all"]:
         configs = get_build_configs()
         
-        args["project"] = configs.keys()
+        args["project"] = list(configs.keys())
 
     if args['def']:
         defines = args['def']

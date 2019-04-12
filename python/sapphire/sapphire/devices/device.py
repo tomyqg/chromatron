@@ -24,13 +24,23 @@
 
 """Device
 """
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import input
+from builtins import chr
+from builtins import str
+from builtins import range
+from past.builtins import basestring
+from past.utils import old_div
+from builtins import object
 
 from elysianfields import *
 from catbus import get_type_name, Client, CATBUS_DISCOVERY_PORT, catbus_string_hash, NoResponseFromHost, ProtocolErrorException
 
-import sapphiredata
-import firmware
-import channel
+from . import sapphiredata
+from . import firmware
+from . import channel
 
 import time
 import sys
@@ -253,14 +263,14 @@ class KVMeta(DictMixin):
         self.kv_items = dict()
 
     def keys(self):
-        return self.kv_items.keys()
+        return list(self.kv_items.keys())
 
     def __getitem__(self, key):
         return self.kv_items[key]
 
     def __setitem__(self, key, value):
         if key in self.kv_items:
-            print "DuplicateKeyNameException: %s" % (key)
+            print("DuplicateKeyNameException: %s" % (key))
             # print key
             # we already have an item here
             # raise DuplicateKeyNameException("DuplicateKeyNameException: %s" % (key))
@@ -274,7 +284,7 @@ class KVMeta(DictMixin):
     def check(self):
         # check for duplicate IDs
         for key in self.kv_items:
-            l = len([k for k, v in self.kv_items.iteritems()
+            l = len([k for k, v in self.kv_items.items()
                         if v.group == self.kv_items[key].group
                             and v.id == self.kv_items[key].id])
 
@@ -365,7 +375,7 @@ class Device(object):
     def to_dict(self):
         d = dict()
 
-        for k, v in self._keys.iteritems():
+        for k, v in self._keys.items():
             d[k] = v.value
 
         d["firmware_name"] = self.firmware_name
@@ -428,7 +438,7 @@ class Device(object):
         self._keys = KVMeta()
 
         # load keys into meta data
-        for key, meta in kvmeta.iteritems():
+        for key, meta in kvmeta.items():
             self._keys[key] = KVKey(key=key, device=self, group=0, id=meta.hash, flags=meta.flags, type=meta.type)
 
         # run duplicate ID check
@@ -436,7 +446,7 @@ class Device(object):
             self._keys.check()
 
         except DuplicateKeyIDException as e:
-            print e
+            print(e)
 
             raise
 
@@ -491,11 +501,11 @@ class Device(object):
 
         # iterate over keys and create requests for them
         for key in args:
-            expanded_keys.extend(fnmatch.filter(self._keys.keys(), key))
+            expanded_keys.extend(fnmatch.filter(list(self._keys.keys()), key))
 
         responses = self._client.get_keys(expanded_keys)
     
-        for k, v in responses.iteritems():
+        for k, v in responses.items():
             # update internal meta data
             self._keys[k]._value = v
 
@@ -729,8 +739,8 @@ class Device(object):
         s = "\n"
 
         # sort between disk and virtual files
-        disk_files = sorted([f for f in fileinfo.values() if (f['flags'] & 1) == 0], key=lambda a: a['filename'])
-        vfiles = sorted([f for f in fileinfo.values() if (f['flags'] & 1) != 0], key=lambda a: a['filename'])
+        disk_files = sorted([f for f in list(fileinfo.values()) if (f['flags'] & 1) == 0], key=lambda a: a['filename'])
+        vfiles = sorted([f for f in list(fileinfo.values()) if (f['flags'] & 1) != 0], key=lambda a: a['filename'])
 
         # iterate over file listing
         for f in disk_files:
@@ -769,7 +779,7 @@ class Device(object):
             sys.stdout.write("\rReading: %5d bytes" % (length))
             sys.stdout.flush()
 
-        print ""
+        print("")
 
         data = self.get_file(line, progress=progress)
 
@@ -788,7 +798,7 @@ class Device(object):
         data = f.read()
         f.close()
 
-        print ""
+        print("")
 
         self.put_file(line, data, progress=progress)
 
@@ -806,14 +816,14 @@ class Device(object):
 
         self.load_firmware(firmware_id=fw, progress=progress)
 
-        print ""
+        print("")
 
         return "Rebooting..."
 
     def cli_rebootloadfw(self, line):
         self.reboot_and_load_fw()
 
-        print ""
+        print("")
 
         return "Rebooting with load firmware command..."
 
@@ -972,7 +982,7 @@ class Device(object):
                 flags += '-'
 
             try:
-                avg_time = n.run_time / n.runs
+                avg_time = old_div(n.run_time, n.runs)
 
             except ZeroDivisionError:
                 avg_time = 0
@@ -1134,7 +1144,7 @@ class Device(object):
         if isinstance(params, dict):
             s = "\nName                             Flags  Type     Value\n"
 
-            for k in sorted(params.iterkeys()):
+            for k in sorted(params.keys()):
                 s += "%s\n" % (self._keys[k])
 
         else:
@@ -1165,11 +1175,11 @@ class Device(object):
 
 
     def cli_resetcfg(self, line):
-        print ""
-        print "DANGER ZONE! Are you sure you want to do this?"
-        print "Type 'yes' if you are sure."
+        print("")
+        print("DANGER ZONE! Are you sure you want to do this?")
+        print("Type 'yes' if you are sure.")
 
-        yes = raw_input()
+        yes = input()
 
         if yes == "yes":
             self.reset_config()
@@ -1180,7 +1190,7 @@ class Device(object):
 
     def cli_systime(self, line):
         t = self.get_key("sys_time")
-        dt = timedelta(seconds=long(t / 1000))
+        dt = timedelta(seconds=int(old_div(t, 1000)))
 
         return "%11d ms (%s)" % (t, str(dt))
 
@@ -1200,7 +1210,7 @@ class Device(object):
                                                                             params["mem_peak_usage"],
                                                                             params["fs_free_space"],
                                                                             params["sys_time"],
-                                                                            params["supply_voltage"] / 1000.0)
+                                                                            old_div(params["supply_voltage"], 1000.0))
 
         return s
 
@@ -1235,15 +1245,15 @@ class Device(object):
         params = self.get_kv("thread_task_time", "thread_sleep_time", "thread_peak", "thread_loops", "thread_run_time")
 
         # convert all params to floats
-        params = {k: float(v) for (k, v) in params.iteritems()}
+        params = {k: float(v) for (k, v) in params.items()}
 
         if params["thread_run_time"] == 0:
             loop_rate = 0
             cpu_usage = 0
 
         else:
-            loop_rate = params["thread_loops"] / (params["thread_run_time"] / 1000.0)
-            cpu_usage = (params["thread_task_time"] / params["thread_run_time"]) * 100.0
+            loop_rate = old_div(params["thread_loops"], (old_div(params["thread_run_time"], 1000.0)))
+            cpu_usage = (old_div(params["thread_task_time"], params["thread_run_time"])) * 100.0
 
         s = "CPU:%2.1f%% Tsk:%8d Slp:%8d Ohd:%8d MaxT:%3d Loops:%8d @ %5d/sec" % \
             (cpu_usage,
@@ -1260,9 +1270,9 @@ class Device(object):
         params = self.get_kv("sys_time_us", "irq_time", "irq_longest_time", "irq_longest_addr")
 
         # convert all params to floats
-        params = {k: float(v) for (k, v) in params.iteritems()}
+        params = {k: float(v) for (k, v) in params.items()}
 
-        irq_usage = (params["irq_time"] / params["sys_time_us"]) * 100.0
+        irq_usage = (old_div(params["irq_time"], params["sys_time_us"])) * 100.0
 
         s = "IRQ:%2.1f%% Longest:%6d uS Addr:0x%05x" % \
             (irq_usage,
@@ -1318,7 +1328,7 @@ class Device(object):
 
         # verify first byte (quick sanity check)
         if data_bytes[0] != 0xE9:
-            print "Invalid firmware image!"
+            print("Invalid firmware image!")
             return
 
         # compute firmware length, minus the md5 at the end
@@ -1330,7 +1340,7 @@ class Device(object):
         md5_digest = hashlib.md5(data[:fw_len]).digest()
 
         if file_md5 != md5_digest:
-            print "Invalid firmware image!"
+            print("Invalid firmware image!")
             return
 
 
@@ -1359,7 +1369,7 @@ class Device(object):
 
 
 
-        print "\nLoading firmware image"
+        print("\nLoading firmware image")
 
         try:
             self.delete_file(filename)
@@ -1374,26 +1384,26 @@ class Device(object):
             self.put_file(filename, data, progress=progress)
 
         except Exception as e:
-            print type(e), e
+            print(type(e), e)
             raise
 
-        print "\nVerifying firmware image..."
+        print("\nVerifying firmware image...")
 
         self.check_file(filename, data)
 
-        print "Setting firmware length..."
+        print("Setting firmware length...")
         self.set_key('wifi_fw_len', fw_len)
 
-        print "Setting MD5..."
+        print("Setting MD5...")
         self.set_key('wifi_md5', binascii.hexlify(md5_digest))
 
-        print "Starting wifi firmware flasher..."
+        print("Starting wifi firmware flasher...")
 
         self.reboot()
 
         time.sleep(5.0)
 
-        for i in xrange(20):
+        for i in range(20):
             try:
                 self.echo('')
 
@@ -1403,7 +1413,7 @@ class Device(object):
 
         self.echo('')
 
-        print "Firmware load complete"
+        print("Firmware load complete")
 
     def cli_loadvm(self, line):
         with open('vm.bin', 'rb') as f:
@@ -1425,12 +1435,12 @@ class Device(object):
         kvmeta = sapphiredata.KVMetaArray().unpack(data)
 
         for kv in kvmeta:
-            print kv
+            print(kv)
 
     def cli_getfileid(self, line):
         file_id = self.get_file_id(line)
 
-        print "File ID: %d" % (file_id)
+        print("File ID: %d" % (file_id))
 
 def createDevice(**kwargs):
     return Device(**kwargs)

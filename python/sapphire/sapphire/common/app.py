@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import object
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -20,8 +24,8 @@
 # 
 # </license>
 
-import util
-from ribbon import Ribbon
+from . import util
+from .ribbon import Ribbon
 
 import json
 import logging
@@ -29,7 +33,7 @@ import signal
 import sys
 import os
 import time
-import Queue
+import queue
 
 
 def load_settings(filename='settings.json'):

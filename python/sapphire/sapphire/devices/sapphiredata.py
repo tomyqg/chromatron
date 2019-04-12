@@ -23,6 +23,7 @@
 #
 """Sapphire Data
 """
+from __future__ import print_function
 
 from elysianfields import *
 from sapphire.fields import get_field_for_type
@@ -272,8 +273,8 @@ class KVParamField(StructField):
             self._fields[valuefield._name] = valuefield
 
         except KeyError:
-            print "ERROR:", self.type
-            print self
+            print("ERROR:", self.type)
+            print(self)
             raise
 
         return self

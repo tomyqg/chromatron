@@ -1,3 +1,7 @@
+from __future__ import division
+from builtins import str
+from past.builtins import basestring
+from past.utils import old_div
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -115,8 +119,8 @@ def coerce_value_to_target_type(value, target):
     elif isinstance(target, float):
         return float(value)
 
-    elif isinstance(target, long):
-        return long(value)
+    elif isinstance(target, int):
+        return int(value)
 
     elif isinstance(target, basestring):
         return str(value)
@@ -134,7 +138,7 @@ def datetime_to_ntp(dt):
     return seconds, fraction
 
 def ntp_to_datetime(seconds, fraction):
-    fraction = float(fraction) / (pow(2, 32) - 1)
+    fraction = old_div(float(fraction), (pow(2, 32) - 1))
     seconds = float(seconds) + fraction
 
     delta = timedelta(seconds=seconds)
@@ -142,7 +146,7 @@ def ntp_to_datetime(seconds, fraction):
     return delta + NTP_EPOCH
 
 def datetime_to_microseconds(dt):
-    return long((dt - NTP_EPOCH).total_seconds() * 1000000)
+    return int((dt - NTP_EPOCH).total_seconds() * 1000000)
 
 def microseconds_to_datetime(ms):
     return timedelta(microseconds=ms) + NTP_EPOCH
@@ -160,7 +164,7 @@ def linear_interp(x, x0, x1, y0, y1):
     elif x < x0:
         x = x0
 
-    y = y0 + (y1 - y0)*((x - x0) / (x1 - x0))
+    y = y0 + (y1 - y0)*(old_div((x - x0), (x1 - x0)))
 
     return y
 

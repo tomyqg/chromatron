@@ -29,6 +29,9 @@ delivery with an automatic repeat request mechanism in the client.
 
 
 """
+from __future__ import print_function
+from builtins import range
+from builtins import object
 
 
 import socket
@@ -220,7 +223,7 @@ class ClientSocket(object):
 
         # print '',
         # retry loop
-        for i in xrange(self._tries):
+        for i in range(self._tries):
 
             # set initial timeout
             timeout = self._initial_timeout
@@ -472,4 +475,4 @@ if __name__ == '__main__':
 
     c.sendto("Jeremy", ("192.168.2.233", 1234))
 
-    print c.recvfrom()
+    print(c.recvfrom())

@@ -1,3 +1,4 @@
+from builtins import chr
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.

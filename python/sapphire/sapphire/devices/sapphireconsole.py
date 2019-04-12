@@ -1,3 +1,5 @@
+from __future__ import print_function
+from builtins import str
 #! python
 #
 # <license>
@@ -117,10 +119,10 @@ class SapphireConsole(cmd.Cmd):
         devices = self.query(line)
 
         if devices:
-            print "Found %d devices" % (len(devices))
+            print("Found %d devices" % (len(devices)))
 
             for device in devices:
-                print device.who()
+                print(device.who())
 
     def do_select(self, line):
         # query for targets
@@ -130,7 +132,7 @@ class SapphireConsole(cmd.Cmd):
 
         self.init_shell(line)
 
-        print "Selected %d devices" % (len(self.targets))
+        print("Selected %d devices" % (len(self.targets)))
 
         return True
 
@@ -143,7 +145,7 @@ class SapphireConsole(cmd.Cmd):
 
         self.init_shell(line)
 
-        print "Selected %d devices" % (len(self.targets))
+        print("Selected %d devices" % (len(self.targets)))
 
         return True
 
@@ -156,13 +158,13 @@ class SapphireConsole(cmd.Cmd):
 
         self.init_shell(line)
 
-        print "Selected %d devices" % (len(self.targets))
+        print("Selected %d devices" % (len(self.targets)))
 
         return True
 
     def do_who(self, line):
         for target in self.targets:
-            print target.who()
+            print(target.who())
 
 
 cli_template = """
@@ -207,7 +209,7 @@ def main():
         sys.argv[1] = '' # prevents an unknown syntax error in the command loop
 
         try:
-            print "Connecting to %s" % host
+            print("Connecting to %s" % host)
 
             d = Device(host=host)
             d.scan()
@@ -216,11 +218,11 @@ def main():
             c.cmdloop()
 
         except:
-            print "*** Unable to connect to %s" % host
+            print("*** Unable to connect to %s" % host)
             raise
 
     except IndexError:
-        print "No device specified"
+        print("No device specified")
 
 
 if __name__ == '__main__':

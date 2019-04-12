@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -25,10 +27,10 @@ import logging
 import time
 import threading
 import select
-from client import Client
+from .client import Client
 from copy import copy
 
-from messages import *
+from .messages import *
 
 from sapphire.common import Ribbon, MsgQueueEmptyException
 
@@ -95,7 +97,7 @@ class Directory(Ribbon):
                     raise
 
     def _handle_error(self, msg, host):
-        print msg
+        print(msg)
 
     def _handle_announce(self, msg, host):
         resolved_query = [self.resolve_hash(a, host=host) for a in msg.query if a != 0]
@@ -144,10 +146,10 @@ class Directory(Ribbon):
             self._last_ttl = time.time()
 
             with self.__lock:
-                for key, info in self._directory.iteritems():
+                for key, info in self._directory.items():
                     info['ttl'] -= 4.0
 
-                self._directory = {k: v for k, v in self._directory.iteritems() if v['ttl'] >= 0.0}
+                self._directory = {k: v for k, v in self._directory.items() if v['ttl'] >= 0.0}
 
 
 if __name__ == '__main__':
@@ -161,7 +163,7 @@ if __name__ == '__main__':
             time.sleep(1.0)
 
             pprint(d.get_directory())
-            print len(d.get_directory())
+            print(len(d.get_directory()))
 
     except KeyboardInterrupt:
         pass

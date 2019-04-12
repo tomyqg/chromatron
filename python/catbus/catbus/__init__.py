@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -20,9 +21,9 @@
 # 
 # </license>
 
-from data_structures import *
-from catbustypes import *
-from options import *
-from client import Client
-from catbus import CatbusService
+from .data_structures import *
+from .catbustypes import *
+from .options import *
+from .client import Client
+from .catbus import CatbusService
 

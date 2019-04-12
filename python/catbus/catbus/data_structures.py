@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from builtins import str
+from builtins import range
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -22,7 +25,7 @@
 
 
 from elysianfields import *
-from catbustypes import *
+from .catbustypes import *
 from fnvhash import fnv1a_32
 
 
@@ -245,6 +248,6 @@ META_TAGS = [
     META_TAG_LOC,
 ]
 
-for i in xrange(META_TAG_GROUP_COUNT):
+for i in range(META_TAG_GROUP_COUNT):
     META_TAGS.append(META_TAG_BASE % (i))
 

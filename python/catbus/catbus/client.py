@@ -1,3 +1,9 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import str
+from builtins import range
+from past.builtins import basestring
+from builtins import object
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -21,9 +27,9 @@
 # </license>
 
 import socket
-from data_structures import *
-from messages import *
-from options import *
+from .data_structures import *
+from .messages import *
+from .options import *
 import time
 import netifaces
 
@@ -150,7 +156,7 @@ class Client(object):
             except TypeError:
                 arg_list.append(arg)
 
-        chunks = [arg_list[x:x + CATBUS_MAX_HASH_LOOKUPS] for x in xrange(0, len(arg_list), CATBUS_MAX_HASH_LOOKUPS)]
+        chunks = [arg_list[x:x + CATBUS_MAX_HASH_LOOKUPS] for x in range(0, len(arg_list), CATBUS_MAX_HASH_LOOKUPS)]
 
         for chunk in chunks:
             hashes = []
@@ -169,7 +175,7 @@ class Client(object):
 
             response, sender = self._exchange(msg)
 
-            for i in xrange(len(response.keys)):
+            for i in range(len(response.keys)):
                 key = response.keys[i]
                 hashed_key = hashes[i]
 
@@ -182,14 +188,14 @@ class Client(object):
         tags = None
 
         # check for any keys that didn't resolve
-        for k, v in resolved_keys.iteritems():
+        for k, v in resolved_keys.items():
             if k == 0:
                 continue
 
             if v == None:
                 # try computing hash from meta tags
                 if tags is None:
-                    tags = {catbus_string_hash(v): v for v in self.get_tags().itervalues() if len(v) > 0}
+                    tags = {catbus_string_hash(v): v for v in self.get_tags().values() if len(v) > 0}
                 
                 try:
                     resolved_keys[k] = tags[k]
@@ -227,7 +233,7 @@ class Client(object):
 
         broadcast_addrs = get_broadcast_addresses()
 
-        for i in xrange(3):
+        for i in range(3):
             for addr in broadcast_addrs:
                 discover_sock.sendto(msg.pack(), (addr, CATBUS_DISCOVERY_PORT))
 
@@ -299,7 +305,7 @@ class Client(object):
         return meta
 
     def get_all_keys(self):
-        return self.get_keys(self.meta.keys())
+        return self.get_keys(list(self.meta.keys()))
 
     def get_keys(self, *args, **kwargs):
         with_meta = False
@@ -333,7 +339,7 @@ class Client(object):
         answers = {}
 
         while len(hashes) > 0:
-            request_list = hashes.keys()[:CATBUS_MAX_GET_KEY_ITEM_COUNT]
+            request_list = list(hashes.keys())[:CATBUS_MAX_GET_KEY_ITEM_COUNT]
 
             msg = GetKeysMsg(hashes=request_list)
 
@@ -353,7 +359,7 @@ class Client(object):
                     del hashes[item.meta.hash]
 
             except InvalidMessageException:
-                print "Invalid message received"
+                print("Invalid message received")
                 return answers
 
         return answers
@@ -368,10 +374,10 @@ class Client(object):
         # check if we have these keys
         # we're doing this because on older versions of catbus,
         # requesting a key that does not exist may return garbage.
-        key_data = {str(k):v for k,v in key_data.iteritems() if k in self.meta}
+        key_data = {str(k):v for k,v in key_data.items() if k in self.meta}
 
         # need to get meta data so we can pack
-        meta = self.get_keys(key_data.keys(), with_meta=True)
+        meta = self.get_keys(list(key_data.keys()), with_meta=True)
         
         # create data items
         items = []
@@ -403,7 +409,7 @@ class Client(object):
         batches = [batch for batch in batches if len(batch) > 0]
 
         hashes = {}
-        for key in key_data.iterkeys():
+        for key in key_data.keys():
             hashes[catbus_string_hash(key)] = key
 
         answers = {}
@@ -758,7 +764,7 @@ if __name__ == '__main__':
     # print c.get_key('test_woof')
     # c.set_key('test_woof', ['4','5','6','7'])
 
-    print c.get_key('fx_a')
+    print(c.get_key('fx_a'))
 
 
 

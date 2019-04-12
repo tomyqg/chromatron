@@ -1,3 +1,11 @@
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import str
+from builtins import range
+from past.builtins import basestring
+from past.utils import old_div
+from builtins import object
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -25,10 +33,10 @@ import logging
 import time
 import threading
 import select
-from client import Client
+from .client import Client
 
-from messages import *
-from catbustypes import *
+from .messages import *
+from .catbustypes import *
 
 from sapphire.common import Ribbon, MsgQueueEmptyException
 
@@ -163,11 +171,11 @@ class Publisher(Ribbon):
             self.link_data_transmissions[host][msg.dest_hash] = msg
 
         # print self.link_data_transmissions
-        for host in self.link_data_transmissions.keys():
+        for host in list(self.link_data_transmissions.keys()):
             msgs = self.link_data_transmissions[host]
 
             # get a random message for this host and send it
-            target = random.choice(msgs.keys())
+            target = random.choice(list(msgs.keys()))
             msg = msgs[target]
 
             self._server._send_data_msg(msg, host)
@@ -402,7 +410,7 @@ class Server(Ribbon):
 
     def _handle_error(self, msg, host):
         if msg.error_code != CATBUS_ERROR_UNKNOWN_MSG:
-            print msg, host
+            print(msg, host)
 
     def _handle_discover(self, msg, host):
         if self.visible:
@@ -427,7 +435,7 @@ class Server(Ribbon):
         keys = sorted(self._database.keys())
         key_count = len(keys)
         index = msg.page * CATBUS_MAX_KEY_META
-        page_count = (key_count / CATBUS_MAX_KEY_META ) + 1
+        page_count = (old_div(key_count, CATBUS_MAX_KEY_META) ) + 1
         item_count = key_count - index
 
         if item_count < 0:
@@ -437,7 +445,7 @@ class Server(Ribbon):
             item_count = CATBUS_MAX_KEY_META
     
         meta = []
-        for i in xrange(item_count):
+        for i in range(item_count):
             key = keys[i + index]
             item = self._database.get_item(key)
             meta.append(item.meta)
@@ -716,8 +724,8 @@ class Server(Ribbon):
                 # for link in self._links:
                 #     print link
 
-                for i in self._receive_cache.keys():
-                    for j in self._receive_cache[i].keys():
+                for i in list(self._receive_cache.keys()):
+                    for j in list(self._receive_cache[i].keys()):
                         self._receive_cache[i][j]['ttl'] -= 4
 
                         if self._receive_cache[i][j]['ttl'] <= 0:

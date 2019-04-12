@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -22,9 +23,9 @@
 
 
 from elysianfields import *
-from data_structures import *
-from catbustypes import *
-from options import *
+from .data_structures import *
+from .catbustypes import *
+from .options import *
 import random
 
 

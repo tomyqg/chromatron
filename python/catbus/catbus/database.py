@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from builtins import str
+from past.builtins import basestring
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -28,7 +31,7 @@ import time
 import logging
 
 
-from data_structures import *
+from .data_structures import *
 
 
 DATAFILE_EXT = '.catbusdb'
@@ -97,7 +100,7 @@ class Database(DictMixin, object):
     def keys(self):
         """Return list of keys"""
         with self._lock:
-            return self._kv_items.keys().extend(self._hashes.keys())
+            return list(self._kv_items.keys()).extend(list(self._hashes.keys()))
 
     def get_query(self):
         query = CatbusQuery()
@@ -136,7 +139,7 @@ class Database(DictMixin, object):
         elif isinstance(value, float):
             return 'float'
 
-        elif isinstance(value, long):
+        elif isinstance(value, int):
             return 'int64'
 
         elif isinstance(value, basestring):

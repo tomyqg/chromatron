@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -20,7 +22,7 @@
 # 
 # </license>
 import sys
-import code_gen
+from . import code_gen
 import time
 import threading
 from sapphire.common.ribbon import Ribbon
@@ -71,7 +73,7 @@ class VMContainer(Ribbon):
         next_run = time.time() + self.frame_rate
 
         if self.check_file_hash():
-            print "Reloading VM"
+            print("Reloading VM")
             self.load_vm()
 
         self.vm.run('loop')

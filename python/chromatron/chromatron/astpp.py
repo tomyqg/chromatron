@@ -4,6 +4,7 @@ the ast.dump function and modified slightly to pretty-print.
 
 Alex Leone (acleone ~AT~ gmail.com), 2010-01-30
 """
+from __future__ import print_function
 
 from ast import *
 
@@ -51,11 +52,11 @@ def dump(node, annotate_fields=True, include_attributes=False, indent='  '):
 if __name__ == '__main__':
     import sys
     for filename in sys.argv[1:]:
-        print '=' * 50
-        print 'AST tree for', filename
-        print '=' * 50
+        print('=' * 50)
+        print('AST tree for', filename)
+        print('=' * 50)
         f = open(filename, 'r')
         fstr = f.read()
         f.close()
-        print dump(parse(fstr, filename=filename), include_attributes=True)
-        print
+        print(dump(parse(fstr, filename=filename), include_attributes=True))
+        print()

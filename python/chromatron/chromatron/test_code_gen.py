@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -21,7 +23,7 @@
 # </license>
 
 import unittest
-import code_gen
+from . import code_gen
 
 empty_program = """
 def init():
@@ -3452,7 +3454,7 @@ class CGTestsLocal(CGTestsBase):
         vm.run_once()
         regs = vm.dump_registers()
 
-        for reg, value in expected.iteritems():
+        for reg, value in expected.items():
             try:
                 try:
                     self.assertEqual(regs[reg], value)
@@ -3462,10 +3464,10 @@ class CGTestsLocal(CGTestsBase):
                     self.assertEqual(vm.db[reg], value)
 
             except AssertionError:
-                print '\n*******************************'
-                print program
-                print 'Var: %s Expected: %s Actual: %s' % (reg, value, regs[reg])
-                print '-------------------------------\n'
+                print('\n*******************************')
+                print(program)
+                print('Var: %s Expected: %s Actual: %s' % (reg, value, regs[reg]))
+                print('-------------------------------\n')
                 raise
 
 

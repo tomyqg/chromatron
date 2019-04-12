@@ -1,3 +1,9 @@
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import range
+from past.utils import old_div
+from builtins import object
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -26,12 +32,12 @@ try:
     import rtmidi
 
 except ImportError:
-    print "Missing dependency!"
-    print "Install rtmidi: pip install python-rtmidi"
+    print("Missing dependency!")
+    print("Install rtmidi: pip install python-rtmidi")
     sys.exit(0)
 
 import time
-import midi_config
+from . import midi_config
 from catbus import CatbusService
 
 
@@ -77,12 +83,12 @@ class Midi(object):
         selected_input_port = None
 
         try:
-            for i in xrange(len(available_output_ports)):
+            for i in range(len(available_output_ports)):
                 if available_output_ports[i].find(port) >= 0:
                     selected_output_port = i
                     break
 
-            for i in xrange(len(available_input_ports)):
+            for i in range(len(available_input_ports)):
                 if available_input_ports[i].find(port) >= 0:
                     selected_input_port = i
                     break
@@ -165,7 +171,7 @@ class KVMidi(Midi):
             value = int(value * 65535.0 / 127.0)
 
         elif self.convert_float_1:
-            value = value / 127.0
+            value = old_div(value, 127.0)
 
         self.kv[control] = value
 
@@ -189,13 +195,13 @@ class KVMidi(Midi):
 
 class MidiInputPrinter(Midi):
     def on_noteoff(self, note, value, timedelta):
-        print "NOTE OFF", note, value, timedelta
+        print("NOTE OFF", note, value, timedelta)
 
     def on_noteon(self, note, value, timedelta):
-        print "NOTE ON", note, value, timedelta
+        print("NOTE ON", note, value, timedelta)
 
     def on_controlchange(self, note, value, timedelta):
-        print "CONTROL CHANGE", note, value, timedelta
+        print("CONTROL CHANGE", note, value, timedelta)
 
 
 def list_output_ports():
@@ -214,19 +220,19 @@ def port_connected(target_port):
     return False
 
 def print_midi_ports():
-    print "Inputs:"
+    print("Inputs:")
 
     for port in list_input_ports():
-        print port
+        print(port)
 
-    print ""
+    print("")
 
-    print "Outputs:"
+    print("Outputs:")
 
     for port in list_output_ports():
-        print port
+        print(port)
 
-    print ""
+    print("")
 
 
 

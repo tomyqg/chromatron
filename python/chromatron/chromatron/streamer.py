@@ -1,3 +1,8 @@
+from __future__ import division
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 
 # <license>
 # 
@@ -86,7 +91,7 @@ class PixelArray(object):
 
         self.name = name
         self.length = length
-        self.list = [value for a in xrange(length)]
+        self.list = [value for a in range(length)]
 
         self.streamer = streamer
         self.streamer.register_array(self)
@@ -133,35 +138,35 @@ class PixelArray(object):
 
     def __iadd__(self, other):
         with self.__lock:
-            for i in xrange(len(self.list)):
+            for i in range(len(self.list)):
                 self.list[i] = self.check(other + self.list[i])
 
         return self
 
     def __isub__(self, other):
         with self.__lock:
-            for i in xrange(len(self.list)):
+            for i in range(len(self.list)):
                 self.list[i] = self.check(other - self.list[i])
 
         return self
 
     def __imul__(self, other):
         with self.__lock:
-            for i in xrange(len(self.list)):
+            for i in range(len(self.list)):
                 self.list[i] = self.check(other * self.list[i])
 
         return self
 
     def __idiv__(self, other):
         with self.__lock:
-            for i in xrange(len(self.list)):
-                self.list[i] = self.check(other / self.list[i])
+            for i in range(len(self.list)):
+                self.list[i] = self.check(old_div(other, self.list[i]))
 
         return self
 
     def __imod__(self, other):
         with self.__lock:
-            for i in xrange(len(self.list)):
+            for i in range(len(self.list)):
                 self.list[i] = self.check(other % self.list[i])
 
         return self
@@ -170,7 +175,7 @@ class PixelArray(object):
         with self.__lock:
             other = self.check(other)
 
-            for i in xrange(len(self.list)):
+            for i in range(len(self.list)):
                 self.list[i] = other
 
 
@@ -231,7 +236,7 @@ class Streamer(object):
 
             i = 0
             index = 0
-            for i in xrange(len(hue_list)):
+            for i in range(len(hue_list)):
                 h = hue_list[i]
                 s = sat_list[i]
                 v = val_list[i]
@@ -246,11 +251,11 @@ class Streamer(object):
                 pixels.append(int(v))
 
                 if len(pixels) >= PIXEL_MSG_MAX_LEN * 3:
-                    msg = PixelHSVMsg(index=index, count=len(pixels) / 3).pack()    
+                    msg = PixelHSVMsg(index=index, count=old_div(len(pixels), 3)).pack()    
                     msg += struct.pack('<%dH' % (len(pixels)), *pixels)
 
                     msgs.append(msg)
-                    index += (len(pixels) / 3)
+                    index += (old_div(len(pixels), 3))
 
                     pixels = []
 
@@ -260,7 +265,7 @@ class Streamer(object):
 
             # get last message
             if len(pixels) >= 3:
-                msg = PixelHSVMsg(pixels=pixels, index=index, count=len(pixels) / 3).pack()
+                msg = PixelHSVMsg(pixels=pixels, index=index, count=old_div(len(pixels), 3)).pack()
                 msg += struct.pack('<%dH' % (len(pixels)), *pixels)
 
                 msgs.append(msg)
@@ -283,7 +288,7 @@ class Streamer(object):
 
             i = 0
             index = 0
-            for i in xrange(len(r_list)):
+            for i in range(len(r_list)):
                 pix_r = r_list[i]
                 pix_g = g_list[i]
                 pix_b = b_list[i]
@@ -298,11 +303,11 @@ class Streamer(object):
                 pixels.append(int(pix_b))
 
                 if len(pixels) >= PIXEL_MSG_MAX_LEN * 3:
-                    msg = PixelRGBMsg(index=index, count=len(pixels) / 3).pack()    
+                    msg = PixelRGBMsg(index=index, count=old_div(len(pixels), 3)).pack()    
                     msg += struct.pack('<%dH' % (len(pixels)), *pixels)
 
                     msgs.append(msg)
-                    index += (len(pixels) / 3)
+                    index += (old_div(len(pixels), 3))
 
                     pixels = []
 
@@ -312,7 +317,7 @@ class Streamer(object):
 
             # get last message
             if len(pixels) >= 3:
-                msg = PixelRGBMsg(pixels=pixels, index=index, count=len(pixels) / 3).pack()
+                msg = PixelRGBMsg(pixels=pixels, index=index, count=old_div(len(pixels), 3)).pack()
                 msg += struct.pack('<%dH' % (len(pixels)), *pixels)
 
                 msgs.append(msg)

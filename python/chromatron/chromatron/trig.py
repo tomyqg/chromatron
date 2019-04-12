@@ -1,3 +1,5 @@
+from __future__ import division
+from past.utils import old_div
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -279,25 +281,25 @@ sine_lookup = [
 32766	,
 ]
 
-QUARTER16 = ( 65535 / 4 )
+QUARTER16 = ( old_div(65535, 4) )
 
 def sine(a):
     a %= 65536
 
     if a < (QUARTER16 * 1):
-        i = a / (QUARTER16 / 256)
+        i = old_div(a, (old_div(QUARTER16, 256)))
         return sine_lookup[i]
 
     elif a < (QUARTER16 * 2):
-        i = (a / (QUARTER16 / 256)) - 256
+        i = (old_div(a, (old_div(QUARTER16, 256)))) - 256
         return sine_lookup[255 - i]
 
     elif a < (QUARTER16 * 3):
-        i = a / (QUARTER16 / 256) - 512
+        i = old_div(a, (old_div(QUARTER16, 256))) - 512
         return -1 * sine_lookup[i]
 
     else:
-        i = a / (QUARTER16 / 256) - 768
+        i = old_div(a, (old_div(QUARTER16, 256))) - 768
         return -1 * sine_lookup[255 - i]
 
 def cosine(a):

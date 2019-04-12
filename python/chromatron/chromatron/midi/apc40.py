@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from builtins import range
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -21,7 +23,7 @@
 # </license>
 
 import time
-import midi
+from . import midi
 import fnmatch
 
 
@@ -55,9 +57,9 @@ class APC40(midi.KVMidi):
         super(APC40, self).__init__(port, name='apc40', **kwargs)
 
         # build output maps based on control type
-        self.knob_led_mode_map = fnmatch.filter(self._out_config.keys(), '*led_mode')
-        self.knob_led_map = fnmatch.filter(self._out_config.keys(), '*knob')
-        self.button_led_map = fnmatch.filter(self._out_config.keys(), '*led')
+        self.knob_led_mode_map = fnmatch.filter(list(self._out_config.keys()), '*led_mode')
+        self.knob_led_map = fnmatch.filter(list(self._out_config.keys()), '*knob')
+        self.button_led_map = fnmatch.filter(list(self._out_config.keys()), '*led')
 
         # self.reset(0.005)
         self.reset(0.003)
@@ -75,7 +77,7 @@ class APC40(midi.KVMidi):
             self.set_button_led(led, 'green')
             time.sleep(delay)
 
-        for i in xrange(127):
+        for i in range(127):
             for led in self.knob_led_map:
                 self.set_knob_led(led, i)
 
@@ -85,7 +87,7 @@ class APC40(midi.KVMidi):
             self.set_button_led(led, 'orange')
             time.sleep(delay)
 
-        for i in xrange(127):
+        for i in range(127):
             for led in self.knob_led_map:
                 self.set_knob_led(led, 127 - i)
 

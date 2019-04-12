@@ -1,3 +1,11 @@
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import str
+from builtins import range
+from past.builtins import basestring
+from past.utils import old_div
+from builtins import object
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -20,7 +28,7 @@
 # 
 # </license>
 
-from instructions import *
+from .instructions import *
 
 from elysianfields import *
 from catbus import *
@@ -351,7 +359,7 @@ class irRecord(irVar):
 
         self.offsets = offsets
         self.length = 0
-        for field in self.fields.values():
+        for field in list(self.fields.values()):
             self.length += field.length
 
 
@@ -364,7 +372,7 @@ class irRecord(irVar):
         return "Record(%s, %s, %d)" % (self.name, self.type, self.length)
 
     def get_field_from_offset(self, offset): 
-        for field_name, addr in self.offsets.items():
+        for field_name, addr in list(self.offsets.items()):
             if addr.name == offset.name:
                 return self.fields[field_name]
 
@@ -382,7 +390,7 @@ class irRecord(irVar):
 
         except KeyError:
             # try looking up by offset
-            for field_name, addr in self.offsets.items():
+            for field_name, addr in list(self.offsets.items()):
                 if addr.name == index.name:
                     return self.fields[field_name].lookup(indexes)
 
@@ -406,7 +414,7 @@ class irStrLiteral(irVar_str):
         self.addr = None
         self.length = 1 # this is a reference to a string, so the length is 1
 
-        self.size = ((self.strlen - 1) / 4) + 2 # space for characters + 32 bit length
+        self.size = (old_div((self.strlen - 1), 4)) + 2 # space for characters + 32 bit length
         
     def __str__(self):
         return 'StrLiteral("%s")[%d]' % (self.name, self.strlen)
@@ -467,7 +475,7 @@ class irPixelArray(irObject):
         except IndexError:
             raise SyntaxError("Missing arguments for PixelArray", lineno=self.lineno)            
 
-        for k, v in kw.items():
+        for k, v in list(kw.items()):
             if k not in self.fields:
                 raise SyntaxError("Invalid argument for PixelArray: %s" % (k), lineno=self.lineno)
 
@@ -629,7 +637,7 @@ class irFunc(IR):
     def labels(self):
         labels = {}
 
-        for i in xrange(len(self.body)):
+        for i in range(len(self.body)):
             ins = self.body[i]
 
             if isinstance(ins, irLabel):
@@ -1143,7 +1151,7 @@ class irIndex(IR):
 
         target = self.target
 
-        for i in xrange(len(self.indexes)):
+        for i in range(len(self.indexes)):
             count = target.count
             counts.append(count)
             
@@ -1480,7 +1488,7 @@ class Builder(object):
 
         pixarray = irPixelArray('temp', lineno=0)
         pixfields = {}
-        for field, value in pixarray.fields.items():
+        for field, value in list(pixarray.fields.items()):
             pixfields[field] = {'type': 'i32', 'dimensions': []}
 
         self.create_record('PixelArray', pixfields, lineno=0)
@@ -1492,23 +1500,23 @@ class Builder(object):
         s = "FX IR:\n"
 
         s += 'Globals:\n'
-        for i in self.globals.values():
+        for i in list(self.globals.values()):
             s += '%d\t%s\n' % (i.lineno, i)
 
         s += 'Locals:\n'
         for fname in sorted(self.locals.keys()):
-            if len(self.locals[fname].values()) > 0:
+            if len(list(self.locals[fname].values())) > 0:
                 s += '\t%s\n' % (fname)
 
                 for l in sorted(self.locals[fname].values()):
                     s += '%d\t\t%s\n' % (l.lineno, l)
 
         s += 'PixelArrays:\n'
-        for i in self.pixel_arrays.values():
+        for i in list(self.pixel_arrays.values()):
             s += '%d\t%s\n' % (i.lineno, i)
 
         s += 'Functions:\n'
-        for func in self.funcs.values():
+        for func in list(self.funcs.values()):
             s += '%s\n' % (func)
 
         return s
@@ -1516,10 +1524,10 @@ class Builder(object):
     def finish_module(self):
         # clean up stuff after first pass is done
 
-        for func in self.funcs.values():
+        for func in list(self.funcs.values()):
             func.remove_dead_labels()
 
-        for func in self.funcs.values():
+        for func in list(self.funcs.values()):
             prev_line = 0
             for ir in func.body:
                 if isinstance(ir, irLabel):
@@ -1555,7 +1563,7 @@ class Builder(object):
         new_fields = {}
         offsets = {}
         offset = 0
-        for field_name, field in fields.items():
+        for field_name, field in list(fields.items()):
             field_type = field['type']
             field_dims = field['dimensions']
             
@@ -1655,7 +1663,7 @@ class Builder(object):
         return ir
 
     def add_tuple(self, items, lineno=None):
-        print items
+        print(items)
 
     def get_var(self, name, lineno=None):
         name = str(name)
@@ -2441,17 +2449,17 @@ class Builder(object):
 
         elif op == 'div':
             if left.get_base_type() == 'f16':
-                val = (left.value * 65536) / right.value
+                val = old_div((left.value * 65536), right.value)
 
             else:
-                val = left.value / right.value
+                val = old_div(left.value, right.value)
 
         elif op == 'mod':
             val = left.value % right.value
 
 
         if left.get_base_type() == 'f16':
-            return self.add_const(float(val) / 65536.0, data_type='f16', lineno=lineno)
+            return self.add_const(old_div(float(val), 65536.0), data_type='f16', lineno=lineno)
 
         else:
             return self.add_const(val, lineno=lineno)
@@ -2462,7 +2470,7 @@ class Builder(object):
             self.cron_tab[func] = []
 
         # convert parameters from const objects into raw integers
-        for k, v in params.items():
+        for k, v in list(params.items()):
             try:
                 params[k] = v.name
 
@@ -2600,7 +2608,7 @@ class Builder(object):
             cfg = self.control_flow(func)
 
 
-        unreachable = range(len(self.funcs[func].body))
+        unreachable = list(range(len(self.funcs[func].body)))
 
         for sequence in cfg:
             for line in sequence:
@@ -2653,7 +2661,7 @@ class Builder(object):
         code = self.funcs[func].body
 
 
-        liveness = [[] for i in xrange(len(code))]
+        liveness = [[] for i in range(len(code))]
 
         for line in unreachable:
             liveness[line] = None
@@ -2760,7 +2768,7 @@ class Builder(object):
             self.data_table.append(field)
 
         # look for additional pixel arrays
-        for i in self.globals.values():
+        for i in list(self.globals.values()):
             if isinstance(i, irRecord) and i.type == 'PixelArray' and i.name != 'pixels':
                 self.pixel_array_indexes.append(i.name)
 
@@ -2777,7 +2785,7 @@ class Builder(object):
                     self.data_table.append(field)
 
         # allocate all other globals
-        for i in self.globals.values():
+        for i in list(self.globals.values()):
             if isinstance(i, irRecord) and i.type == 'PixelArray':
                 continue
 
@@ -2809,7 +2817,7 @@ class Builder(object):
                         continue
 
                     # remove anything that is no longer live
-                    for var in registers.values():
+                    for var in list(registers.values()):
                         # check for arrays with obviously bogus sizes
                         assert var.length < 65535
 
@@ -2819,7 +2827,7 @@ class Builder(object):
                             del registers[var.name]
 
                             var_addr = var.addr
-                            for i in xrange(var.length):
+                            for i in range(var.length):
                                 address_pool.append(var_addr)
                                 var_addr += 1
 
@@ -2888,16 +2896,16 @@ class Builder(object):
                         a.addr = trash_var.addr
 
                     
-            for func_name, local in self.locals.items():
-                for i in local.values():
+            for func_name, local in list(self.locals.items()):
+                for i in list(local.values()):
                     # assign func name to var
                     i.name = '%s.%s' % (func_name, i.name)
 
                     self.data_table.append(i)
 
         else:
-            for func_name, local in self.locals.items():
-                for i in local.values():
+            for func_name, local in list(self.locals.items()):
+                for i in list(local.values()):
                     i.addr = addr
                     addr += i.length
 
@@ -2916,7 +2924,7 @@ class Builder(object):
 
         global_strings = []
         # do the same thing for global vars
-        for g in self.globals.values():
+        for g in list(self.globals.values()):
             if isinstance(g, irVar_str):
                 global_strings.append(g)
                 if g.default_value not in used_strings:
@@ -2944,27 +2952,27 @@ class Builder(object):
         return self.data_table
 
     def print_data_table(self, data):
-        print "DATA: "
+        print("DATA: ")
         for i in sorted(data, key=lambda d: d.addr):
             default_value = ''
 
             if i.length == 1:
                 if i.get_base_type() == 'f16':
-                    default_value += '%f ' % (float(i.default_value / 65536.0))
+                    default_value += '%f ' % (float(old_div(i.default_value, 65536.0)))
 
                 else:
                     default_value += '%s ' % (i.default_value)
 
             else:
                 default_value = '['
-                for n in xrange(i.length):
+                for n in range(i.length):
                     try:
                         val = i.default_value[n]    
                     except TypeError: # no default value given, so this will be all 0s
                         val = 0
                     
                     if i.get_base_type() == 'f16':
-                        default_value += '%f, ' % (float(val / 65536.0))
+                        default_value += '%f, ' % (float(old_div(val, 65536.0)))
 
                     else:
                         default_value += '%s, ' % (val)
@@ -2972,43 +2980,43 @@ class Builder(object):
 
                 default_value += ']'
             
-            print '\t%3d: %s = %s' % (i.addr, i, default_value)
+            print('\t%3d: %s = %s' % (i.addr, i, default_value))
 
-        print "STRINGS: "
+        print("STRINGS: ")
         if len(self.strings) == 0:
-            print "\t None"
+            print("\t None")
 
         else:
             for s in self.strings:
-                print '\t%3d: [%3d] %s' % (s.addr, s.strlen, s.name)
+                print('\t%3d: [%3d] %s' % (s.addr, s.strlen, s.name))
 
     def print_instructions(self, instructions):
-        print "INSTRUCTIONS: "
+        print("INSTRUCTIONS: ")
         i = 0
         for func in instructions:
-            print '\t%s:' % (func)
+            print('\t%s:' % (func))
 
             for ins in instructions[func]:
                 s = '\t\t%3d: %s' % (i, str(ins))
-                print s
+                print(s)
                 i += 1
 
     def print_control_flow(self):
-        print "CONTROL FLOW: "
+        print("CONTROL FLOW: ")
         
         for func in self.funcs:
             cfg = self.control_flow(func)
 
-            print func
-            print cfg
+            print(func)
+            print(cfg)
 
     def remove_unreachable(self):
         if self.optimizations['remove_unreachable_code']:
-            for func in self.funcs.values():
+            for func in list(self.funcs.values()):
                 unreachable = self.unreachable(func.name)
 
                 new_code = []
-                for i in xrange(len(func.body)):
+                for i in range(len(func.body)):
                     if i not in unreachable:
                         new_code.append(func.body[i])
 
@@ -3027,7 +3035,7 @@ class Builder(object):
             self.func('loop', lineno=0)
             self.ret(self.get_var(0), lineno=0)
         
-        for func in self.funcs.values():
+        for func in list(self.funcs.values()):
             ins = []
                     
             code = func.generate()
@@ -3068,7 +3076,7 @@ class Builder(object):
                         self.bytecode.extend(ins.assemble())
 
                     except Exception:
-                        print "Assembly failed for %s" % (ins)
+                        print("Assembly failed for %s" % (ins))
                         raise
 
         # go through byte code and replace labels with addresses
@@ -3118,7 +3126,7 @@ class Builder(object):
 
         # set up pixel arrays
         pix_obj_len = 0
-        for pix in self.pixel_arrays.values():
+        for pix in list(self.pixel_arrays.values()):
             pix_obj_len += pix.length
 
         # set up read keys
@@ -3164,14 +3172,14 @@ class Builder(object):
 
         # set up DB entries
         packed_db = ''
-        for name, entry in self.db_entries.items():
+        for name, entry in list(self.db_entries.items()):
             packed_db += entry.pack()
 
             meta_names.append(name)
         
         # set up cron entries
         packed_cron = ''
-        for func_name, entries in self.cron_tab.items():
+        for func_name, entries in list(self.cron_tab.items()):
             
             for entry in entries:
                 item = CronItem(
@@ -3253,7 +3261,7 @@ class Builder(object):
                 addr += var.size
 
             else:
-                for i in xrange(var.length):
+                for i in range(var.length):
                     try:
                         default_value = var.default_value[i]
                     except TypeError:
@@ -3268,7 +3276,7 @@ class Builder(object):
             assert addr * 4 == data_len
 
         except AssertionError:
-            print addr * 4, data_len
+            print(addr * 4, data_len)
             raise
 
         # create hash of stream
@@ -3341,17 +3349,17 @@ class VM(object):
             self.code = builder.code
             self.data = builder.data_table
 
-            for k, v in builder.pixel_arrays.items():
+            for k, v in list(builder.pixel_arrays.items()):
                 self.pixel_arrays[k] = v.fields
 
         # set up pixel arrays
         self.pix_count = pix_size_x * pix_size_y
 
-        self.hue        = [0 for i in xrange(self.pix_count)]
-        self.sat        = [0 for i in xrange(self.pix_count)]
-        self.val        = [0 for i in xrange(self.pix_count)]
-        self.hs_fade    = [0 for i in xrange(self.pix_count)]
-        self.v_fade     = [0 for i in xrange(self.pix_count)]
+        self.hue        = [0 for i in range(self.pix_count)]
+        self.sat        = [0 for i in range(self.pix_count)]
+        self.val        = [0 for i in range(self.pix_count)]
+        self.hs_fade    = [0 for i in range(self.pix_count)]
+        self.v_fade     = [0 for i in range(self.pix_count)]
 
         self.gfx_data   = {'hue': self.hue,
                            'sat': self.sat,
@@ -3392,7 +3400,7 @@ class VM(object):
 
             addr = var.addr
 
-            for i in xrange(var.length):
+            for i in range(var.length):
                 try:
                     self.memory.append(var.default_value[i])
                 except TypeError:
@@ -3429,7 +3437,7 @@ class VM(object):
             if isinstance(var, irArray):
                 value = []
                 addr = var.addr
-                for i in xrange(var.length):
+                for i in range(var.length):
                     value.append(self.memory[addr])
                     addr += 1
 
@@ -3445,7 +3453,7 @@ class VM(object):
 
             # convert fixed16 to float
             if var.type == 'f16':
-                value = (value >> 16) + (value & 0xffff) / 65536.0
+                value = (value >> 16) + old_div((value & 0xffff), 65536.0)
 
             registers[var.name] = value
 
@@ -3465,11 +3473,11 @@ class VM(object):
 
         # linearize code stream
         code = []
-        for v in self.code.values():
+        for v in list(self.code.values()):
             code.extend(v)
 
         # scan code stream and get offsets for all functions and labels
-        for i in xrange(len(code)):
+        for i in range(len(code)):
             ins = code[i]
             if isinstance(ins, insFunction) or isinstance(ins, insLabel):
                 offsets[ins.name] = i

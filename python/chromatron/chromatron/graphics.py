@@ -1,3 +1,9 @@
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import range
+from builtins import object
+from past.utils import old_div
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -32,14 +38,14 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.graphics import *
 from kivy.clock import Clock
 
-from trig import sine, cosine
+from .trig import sine, cosine
 import math
-import code_gen
+from . import code_gen
 import time
 import threading
 from sapphire.common.ribbon import Ribbon
 
-from filewatcher import Watcher
+from .filewatcher import Watcher
 
 
 class Pixel(object):
@@ -161,7 +167,7 @@ class Pixel(object):
 
             self._fading = True
 
-            hs_fade_steps = int(self.hs_fade / self.fade_rate)
+            hs_fade_steps = int(old_div(self.hs_fade, self.fade_rate))
 
             # require at least 2 fade steps, this mimics hardware
             if hs_fade_steps <= 1:
@@ -178,7 +184,7 @@ class Pixel(object):
                 else:
                     diff += 1.0
 
-            step = diff / hs_fade_steps
+            step = old_div(diff, hs_fade_steps)
 
             # more limits based on hardware fader
             if step > 0.5:
@@ -189,9 +195,9 @@ class Pixel(object):
 
             elif step == 0.0:
                 if diff >= 0:
-                    step = 1.0/32768.0
+                    step = old_div(1.0,32768.0)
                 else:
-                    step = -1.0/32768.0
+                    step = old_div(-1.0,32768.0)
 
             self._hue_step = step
 
@@ -210,14 +216,14 @@ class Pixel(object):
 
             self._fading = True
 
-            hs_fade_steps = int(self.hs_fade / self.fade_rate)
+            hs_fade_steps = int(old_div(self.hs_fade, self.fade_rate))
 
             # require at least 2 fade steps, this mimics hardware
             if hs_fade_steps <= 1:
                 hs_fade_steps = 2
 
             diff = a - self._sat
-            step = diff / hs_fade_steps
+            step = old_div(diff, hs_fade_steps)
 
             # more limits based on hardware fader
             if step > 0.5:
@@ -228,9 +234,9 @@ class Pixel(object):
 
             elif step == 0.0:
                 if diff >= 0:
-                    step = 1.0/32768.0
+                    step = old_div(1.0,32768.0)
                 else:
-                    step = -1.0/32768.0
+                    step = old_div(-1.0,32768.0)
 
             self._sat_step = step
 
@@ -248,14 +254,14 @@ class Pixel(object):
 
             self._fading = True
 
-            v_fade_steps = int(self.v_fade / self.fade_rate)
+            v_fade_steps = int(old_div(self.v_fade, self.fade_rate))
 
             # require at least 2 fade steps, this mimics hardware
             if v_fade_steps <= 1:
                 v_fade_steps = 2
 
             diff = a - self._val
-            step = diff / v_fade_steps
+            step = old_div(diff, v_fade_steps)
 
             # more limits based on hardware fader
             if step > 0.5:
@@ -266,9 +272,9 @@ class Pixel(object):
 
             elif step == 0.0:
                 if diff >= 0:
-                    step = 1.0/32768.0
+                    step = old_div(1.0,32768.0)
                 else:
-                    step = -1.0/32768.0
+                    step = old_div(-1.0,32768.0)
 
             self._val_step = step
 
@@ -290,7 +296,7 @@ class GraphicState(Ribbon):
         self.reset()
 
     def reset(self):
-        self.pixels = [Pixel() for i in xrange(self.height * self.width)]
+        self.pixels = [Pixel() for i in range(self.height * self.width)]
 
         self.update_fader_settings()
 
@@ -325,7 +331,7 @@ class GraphicState(Ribbon):
         return self.pixels[x][y].is_fading()
 
     def update_fader_settings(self):
-        for i in xrange(len(self.pixels)):
+        for i in range(len(self.pixels)):
             self.pixels[i].hs_fade = self._hs_fade
             self.pixels[i].v_fade = self._v_fade
             self.pixels[i].fade_rate = self._fader_rate
@@ -429,10 +435,10 @@ class GraphicState(Ribbon):
     #         self.pixels[i].v_fade = a
 
     def load_arrays(self, arrays):
-        for i in xrange(len(self.pixels)):
-            self.pixels[i].hue = arrays['hue'][i] / 65536.0
-            self.pixels[i].sat = arrays['sat'][i] / 65536.0
-            self.pixels[i].val = arrays['val'][i] / 65536.0
+        for i in range(len(self.pixels)):
+            self.pixels[i].hue = old_div(arrays['hue'][i], 65536.0)
+            self.pixels[i].sat = old_div(arrays['sat'][i], 65536.0)
+            self.pixels[i].val = old_div(arrays['val'][i], 65536.0)
             self.pixels[i].hs_fade = arrays['hs_fade'][i]
             self.pixels[i].v_fade = arrays['v_fade'][i]
 
@@ -465,13 +471,13 @@ class GraphicState(Ribbon):
 
 
     def clear(self):
-        for i in xrange(len(self.pixels)):
+        for i in range(len(self.pixels)):
             self.pixels[i].val = 0.0
 
     def loop(self):
         next_run = time.time() + self._fader_rate
 
-        for i in xrange(len(self.pixels)):
+        for i in range(len(self.pixels)):
             self.pixels[i].fade()
 
         self.wait(next_run - time.time())
@@ -513,7 +519,7 @@ class FXRunner(Ribbon):
         self.wait(next_run - time.time())
 
         if self.watcher.changed():
-            print "Reloading VM"
+            print("Reloading VM")
 
             self.load_vm()
 
@@ -544,20 +550,20 @@ class DisplayWindow(Widget):
         # this is not intuitive.
         canvas_x, canvas_y = self.pos
 
-        pseudo_pixel_width = canvas_width / self.gfx.width
-        pseudo_pixel_height = canvas_height / self.gfx.height
+        pseudo_pixel_width = old_div(canvas_width, self.gfx.width)
+        pseudo_pixel_height = old_div(canvas_height, self.gfx.height)
 
         with self.canvas:
             pseudo_x = canvas_x
 
-            for x in xrange(self.gfx.width):
+            for x in range(self.gfx.width):
                 self.rects.append([])
 
                 # Kivy's coords put 0,0 at the bottom left, but Chromatron
                 # puts it at top left.  So we draw from top down in Kivy.
                 pseudo_y = canvas_y + (canvas_height - pseudo_pixel_height)
 
-                for y in xrange(self.gfx.height):
+                for y in range(self.gfx.height):
                     self.pixels.append(Color(0.0, 0.0, 0.0, mode='hsv'))
                     self.rects[x].append(
                         Rectangle(pos=(pseudo_x, pseudo_y),
@@ -574,7 +580,7 @@ class DisplayWindow(Widget):
     def update(self, dt):
         # start = time.time()
 
-        for i in xrange(len(self.gfx.pixels)):
+        for i in range(len(self.gfx.pixels)):
 
             # this will miss final updates:
             # if not self.gfx.is_fading(x, y):
@@ -632,7 +638,7 @@ class GraphicsApp(App):
 
         # window = FXGrid(padding=10, spacing=10, cols=8, rows=5, fx_runner=fx)
         window = DisplayWindow(fx.gfx)
-        Clock.schedule_interval(window.update, 1.0 / 20.0)
+        Clock.schedule_interval(window.update, old_div(1.0, 20.0))
 
         return window
 

@@ -1,3 +1,7 @@
+from __future__ import division
+from builtins import range
+from past.utils import old_div
+from builtins import object
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -420,7 +424,7 @@ class insDiv(insBinop):
             vm.memory[self.result.addr] = 0
 
         else:
-            vm.memory[self.result.addr] = vm.memory[self.op1.addr] / vm.memory[self.op2.addr]
+            vm.memory[self.result.addr] = old_div(vm.memory[self.op1.addr], vm.memory[self.op2.addr])
 
 class insMod(insBinop):
     mnemonic = 'MOD'
@@ -512,7 +516,7 @@ class insF16Mul(insBinop):
         # NOTE!
         # need to cast to i64 in C version to prevent overflow!
 
-        vm.memory[self.result.addr] = (vm.memory[self.op1.addr] * vm.memory[self.op2.addr]) / 65536
+        vm.memory[self.result.addr] = old_div((vm.memory[self.op1.addr] * vm.memory[self.op2.addr]), 65536)
 
 class insF16Div(insBinop):
     mnemonic = 'F16_DIV'
@@ -526,7 +530,7 @@ class insF16Div(insBinop):
             # NOTE!
             # need to cast left hand side to i64 for multiply by 65536.
             # doing it in this order prevents loss of precision on the fractional side.
-            vm.memory[self.result.addr] = (vm.memory[self.op1.addr] * 65536) / vm.memory[self.op2.addr]
+            vm.memory[self.result.addr] = old_div((vm.memory[self.op1.addr] * 65536), vm.memory[self.op2.addr])
 
 class insF16Mod(insBinop):
     mnemonic = 'F16_MOD'
@@ -684,7 +688,7 @@ class insCall(BaseInstruction):
 
     def execute(self, vm):
         # load arguments with parameters
-        for i in xrange(len(self.params)):
+        for i in range(len(self.params)):
             param = self.params[i]
             arg = self.args[i]
 
@@ -699,7 +703,7 @@ class insCall(BaseInstruction):
         assert len(self.params) == len(self.args)
 
         bc.append(len(self.params))
-        for i in xrange(len(self.params)):
+        for i in range(len(self.params)):
             bc.extend(self.params[i].assemble())
             bc.extend(self.args[i].assemble())
 
@@ -784,7 +788,7 @@ class insLibCall(BaseInstruction):
         addr = self.params[0].addr
         a = memory[addr]
 
-        for i in xrange(self.params[0].var.length - 1):
+        for i in range(self.params[0].var.length - 1):
             addr += 1
             if memory[addr] < a:
                 a = memory[addr]
@@ -795,7 +799,7 @@ class insLibCall(BaseInstruction):
         addr = self.params[0].addr
         a = memory[addr]
 
-        for i in xrange(self.params[0].var.length - 1):
+        for i in range(self.params[0].var.length - 1):
             addr += 1
             if memory[addr] > a:
                 a = memory[addr]
@@ -806,7 +810,7 @@ class insLibCall(BaseInstruction):
         addr = self.params[0].addr
         a = 0
 
-        for i in xrange(self.params[0].var.length):
+        for i in range(self.params[0].var.length):
         
             a += memory[addr]
             addr += 1
@@ -817,12 +821,12 @@ class insLibCall(BaseInstruction):
         addr = self.params[0].addr
         a = 0
 
-        for i in xrange(self.params[0].var.length):
+        for i in range(self.params[0].var.length):
         
             a += memory[addr]
             addr += 1
 
-        return a / self.params[0].var.length
+        return old_div(a, self.params[0].var.length)
 
 class insDBCall(BaseInstruction):
     mnemonic = 'DBCALL'
@@ -941,7 +945,7 @@ class insIndex(BaseInstruction):
     def execute(self, vm):
         addr = self.base_addr.addr
 
-        for i in xrange(len(self.indexes)):
+        for i in range(len(self.indexes)):
             index = vm.memory[self.indexes[i].addr]
             
             count = self.counts[i]
@@ -964,7 +968,7 @@ class insIndex(BaseInstruction):
         bc.extend(self.base_addr.assemble())
         bc.append(len(self.indexes))
 
-        for i in xrange(len(self.indexes)):
+        for i in range(len(self.indexes)):
             bc.extend(self.indexes[i].assemble())
             bc.extend([self.counts[i] % 0xff, (self.counts[i] >> 8) % 0xff])
             bc.extend([self.strides[i] % 0xff, (self.strides[i] >> 8) % 0xff])
@@ -1105,7 +1109,7 @@ class insVectorMov(insVector):
         value = vm.memory[self.value.addr]
         addr = vm.memory[self.target.addr]
 
-        for i in xrange(self.length):
+        for i in range(self.length):
             vm.memory[addr] = value
             addr += 1
 
@@ -1118,7 +1122,7 @@ class insVectorAdd(insVector):
         value = vm.memory[self.value.addr]
         addr = vm.memory[self.target.addr]
 
-        for i in xrange(self.length):
+        for i in range(self.length):
             vm.memory[addr] += value
             addr += 1
 
@@ -1131,7 +1135,7 @@ class insVectorSub(insVector):
         value = vm.memory[self.value.addr]
         addr = vm.memory[self.target.addr]
 
-        for i in xrange(self.length):
+        for i in range(self.length):
             vm.memory[addr] -= value
             addr += 1
 
@@ -1145,13 +1149,13 @@ class insVectorMul(insVector):
         addr = vm.memory[self.target.addr]
 
         if self.type == 'f16':
-            for i in xrange(self.length):
-                vm.memory[addr] = (vm.memory[addr] * value) / 65536
+            for i in range(self.length):
+                vm.memory[addr] = old_div((vm.memory[addr] * value), 65536)
                     
                 addr += 1
 
         else:
-            for i in xrange(self.length):
+            for i in range(self.length):
                 vm.memory[addr] *= value
                 addr += 1
 
@@ -1166,18 +1170,18 @@ class insVectorDiv(insVector):
 
         # check for divide by zero
         if value == 0:
-            for i in xrange(self.length):
+            for i in range(self.length):
                 vm.memory[addr] = value
                 addr += 1
 
         elif self.type == 'f16':
-            for i in xrange(self.length):
-                vm.memory[addr] = (vm.memory[addr] * 65536) / value
+            for i in range(self.length):
+                vm.memory[addr] = old_div((vm.memory[addr] * 65536), value)
                     
                 addr += 1
 
         else:
-            for i in xrange(self.length):
+            for i in range(self.length):
                 vm.memory[addr] /= value
                 addr += 1
 
@@ -1192,18 +1196,18 @@ class insVectorMod(insVector):
 
         # check for divide by zero
         if value == 0:
-            for i in xrange(self.length):
+            for i in range(self.length):
                 vm.memory[addr] = value
                 addr += 1
 
         elif self.type == 'f16':
-            for i in xrange(self.length):
+            for i in range(self.length):
                 vm.memory[addr] = vm.memory[addr] % value
                     
                 addr += 1
 
         else:
-            for i in xrange(self.length):
+            for i in range(self.length):
                 vm.memory[addr] %= value
                 addr += 1
 
@@ -1247,7 +1251,7 @@ class insPixelVectorMov(insPixelVector):
 
         value %= 65536
 
-        for i in xrange(len(array)):
+        for i in range(len(array)):
             array[i] = value
     
 class insPixelVectorAdd(insPixelVector):
@@ -1260,14 +1264,14 @@ class insPixelVectorAdd(insPixelVector):
         array = vm.gfx_data[self.attr]
 
         if self.attr == 'hue':
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] += value
 
                 array[i] %= 65536
 
 
         else:
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] += value
 
                 if array[i] < 0:
@@ -1286,14 +1290,14 @@ class insPixelVectorSub(insPixelVector):
         array = vm.gfx_data[self.attr]
 
         if self.attr == 'hue':
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] -= value
 
                 array[i] %= 65536
 
 
         else:
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] -= value
 
                 if array[i] < 0:
@@ -1312,21 +1316,21 @@ class insPixelVectorMul(insPixelVector):
         array = vm.gfx_data[self.attr]
 
         if self.attr == 'hue':
-            for i in xrange(len(array)):
-                array[i] = (array[i] * value) / 65536
+            for i in range(len(array)):
+                array[i] = old_div((array[i] * value), 65536)
 
                 array[i] %= 65536
 
         elif self.attr in ['hs_fade', 'v_fade']:
-            for i in xrange(len(array)):
+            for i in range(len(array)):
 
                 array[i] = array[i] * value
 
                 array[i] %= 65536
 
         else:
-            for i in xrange(len(array)):
-                array[i] = (array[i] * value) / 65536
+            for i in range(len(array)):
+                array[i] = old_div((array[i] * value), 65536)
 
                 if array[i] < 0:
                     array[i] = 0
@@ -1345,24 +1349,24 @@ class insPixelVectorDiv(insPixelVector):
 
         # check for divide by zero
         if value == 0:
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] = value
 
         elif self.attr in ['hue']:
-            for i in xrange(len(array)):
-                array[i] = (array[i] * 65536) / value
+            for i in range(len(array)):
+                array[i] = old_div((array[i] * 65536), value)
 
                 array[i] %= 65536
 
         elif self.attr in ['hs_fade', 'v_fade']:
-            for i in xrange(len(array)):
-                array[i] = array[i] / value
+            for i in range(len(array)):
+                array[i] = old_div(array[i], value)
 
                 array[i] %= 65536
 
         else:
-            for i in xrange(len(array)):
-                array[i] = (array[i] * 65536) / value
+            for i in range(len(array)):
+                array[i] = old_div((array[i] * 65536), value)
 
                 if array[i] < 0:
                     array[i] = 0
@@ -1381,17 +1385,17 @@ class insPixelVectorMod(insPixelVector):
 
         # check for divide by zero
         if value == 0:
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] = value
 
         elif self.attr == 'hue':
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] %= value
 
                 array[i] %= 65536
 
         else:
-            for i in xrange(len(array)):
+            for i in range(len(array)):
                 array[i] %= value
 
                 if array[i] < 0:
@@ -1606,7 +1610,7 @@ class insDBStore(BaseInstruction):
                 vm.db[self.db_item][index] = vm.memory[self.value.addr]
 
             except IndexError:
-                for i in xrange(len(vm.db[self.db_item])):
+                for i in range(len(vm.db[self.db_item])):
                     vm.db[self.db_item][i] = vm.memory[self.value.addr]                    
 
         except TypeError:
@@ -1709,7 +1713,7 @@ class insConvF16toI32(BaseInstruction):
         return "%s %s = I32(%s)" % (self.mnemonic, self.dest, self.src)
 
     def execute(self, vm):
-        vm.memory[self.dest.addr] = int(vm.memory[self.src.addr] / 65536.0)
+        vm.memory[self.dest.addr] = int(old_div(vm.memory[self.src.addr], 65536.0))
 
     def assemble(self):
         bc = [self.opcode]

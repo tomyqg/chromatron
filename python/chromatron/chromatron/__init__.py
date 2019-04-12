@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -20,4 +21,4 @@
 # 
 # </license>
 
-from chromatron import *
+from .chromatron import *

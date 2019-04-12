@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 # <license>
 # 
 #     This file is part of the Sapphire Operating System.
@@ -20,5 +21,5 @@
 # 
 # </license>
 
-from midi import Midi, MidiPortNotFound, print_midi_ports
-from apc40 import APC40
+from .midi import Midi, MidiPortNotFound, print_midi_ports
+from .apc40 import APC40

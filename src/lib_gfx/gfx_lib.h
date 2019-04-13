@@ -79,6 +79,19 @@ typedef struct  __attribute__((packed)){
     int32_t size_y;
 } gfx_pixel_array_t;
 
+#ifdef GFX_LIB_KV_LINKAGE
+
+#include "keyvalue.h"
+
+int8_t gfx_i8_kv_handler(
+    kv_op_t8 op,
+    catbus_hash_t32 hash,
+    void *data,
+    uint16_t len );
+#endif
+
+void gfxlib_v_param_error_check( void );
+
 void gfx_v_set_vm_frame_rate( uint16_t frame_rate );
 uint16_t gfx_u16_get_vm_frame_rate( void );
 

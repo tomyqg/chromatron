@@ -40,24 +40,8 @@
 #include "hash.h"
 #include "vm_wifi_cmd.h"
 #include "vm_sync.h"
+#include "gfx_lib.h"
 
-
-
-static uint16_t hs_fade = 1000;
-static uint16_t v_fade = 1000;
-static uint16_t gfx_master_dimmer = 65535;
-static uint16_t gfx_sub_dimmer = 65535;
-static uint16_t pix_count;
-static uint16_t pix_size_x;
-static uint16_t pix_size_y;
-static bool gfx_interleave_x;
-static bool gfx_transpose;
-static uint16_t gfx_frame_rate = 100;
-static uint8_t gfx_dimmer_curve = GFX_DIMMER_CURVE_DEFAULT;
-static uint8_t gfx_sat_curve = GFX_SAT_CURVE_DEFAULT;
-
-static uint16_t gfx_virtual_array_start;
-static uint16_t gfx_virtual_array_length;
 
 static bool pixel_transfer_enable = TRUE;
 
@@ -97,7 +81,7 @@ static uint16_t calc_vm_timer( uint32_t ms ){
 
 static void update_vm_timer( void ){
 
-    uint16_t new_timer = calc_vm_timer( gfx_frame_rate + frame_rate_adjust );
+    uint16_t new_timer = calc_vm_timer( gfx_u16_get_vm_frame_rate() + frame_rate_adjust );
 
     if( new_timer != vm_timer_rate ){
 
@@ -113,66 +97,6 @@ static void update_vm_timer( void ){
     }
 }
 
-static void param_error_check( void ){
-
-    // error check
-    if( pix_count > MAX_PIXELS ){
-
-        pix_count = MAX_PIXELS;
-    }
-    else if( pix_count == 0 ){
-
-        // this is necessary to prevent divide by 0 errors.
-        // also, 0 pixels doesn't really make sense in a
-        // pixel graphics library, does it?
-        pix_count = 1;
-    }
-
-    if( ( (uint32_t)pix_size_x * (uint32_t)pix_size_y ) > pix_count ){
-
-        pix_size_x = pix_count;
-        pix_size_y = 1;
-    }
-
-    if( pix_size_x > pix_count ){
-
-        pix_size_x = 1;
-    }
-
-    if( pix_size_y > pix_count ){
-
-        pix_size_y = 1;
-    }
-
-    if( pix_count > 0 ){
-
-        if( pix_size_x == 0 ){
-
-            pix_size_x = 1;
-        }
-
-        if( pix_size_y == 0 ){
-
-            pix_size_y = 1;
-        }
-    }
-
-    if( gfx_frame_rate < 10 ){
-
-        gfx_frame_rate = 10;
-    }
-
-    if( gfx_dimmer_curve < 8 ){
-
-        gfx_dimmer_curve = GFX_DIMMER_CURVE_DEFAULT;
-    }
-
-    if( gfx_sat_curve < 8 ){
-
-        gfx_sat_curve = GFX_SAT_CURVE_DEFAULT;
-    }
-}
-
 
 int8_t gfx_i8_kv_handler(
     kv_op_t8 op,
@@ -183,7 +107,7 @@ int8_t gfx_i8_kv_handler(
 
     if( op == KV_OP_SET ){
 
-        param_error_check();
+        gfxlib_v_param_error_check();
 
         ATOMIC;
         run_flags |= FLAG_RUN_PARAMS;
@@ -195,128 +119,99 @@ int8_t gfx_i8_kv_handler(
     return 0;
 }
 
-KV_SECTION_META kv_meta_t gfx_info_kv[] = {
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_count,                   gfx_i8_kv_handler,   "pix_count" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_sub_dimmer,              gfx_i8_kv_handler,   "gfx_sub_dimmer" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_master_dimmer,           gfx_i8_kv_handler,   "gfx_master_dimmer" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_x,                  gfx_i8_kv_handler,   "pix_size_x" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_y,                  gfx_i8_kv_handler,   "pix_size_y" },
-    { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &gfx_interleave_x,            gfx_i8_kv_handler,   "gfx_interleave_x" },
-    { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &gfx_transpose,               gfx_i8_kv_handler,   "gfx_transpose" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &hs_fade,                     gfx_i8_kv_handler,   "gfx_hsfade" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &v_fade,                      gfx_i8_kv_handler,   "gfx_vfade" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_frame_rate,              gfx_i8_kv_handler,   "gfx_frame_rate" },
-    { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &gfx_dimmer_curve,            gfx_i8_kv_handler,   "gfx_dimmer_curve" },
-    { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &gfx_sat_curve,               gfx_i8_kv_handler,   "gfx_sat_curve" },
+// KV_SECTION_META kv_meta_t gfx_info_kv[] = {
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_count,                   gfx_i8_kv_handler,   "pix_count" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_sub_dimmer,              gfx_i8_kv_handler,   "gfx_sub_dimmer" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_master_dimmer,           gfx_i8_kv_handler,   "gfx_master_dimmer" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_x,                  gfx_i8_kv_handler,   "pix_size_x" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_y,                  gfx_i8_kv_handler,   "pix_size_y" },
+//     { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &gfx_interleave_x,            gfx_i8_kv_handler,   "gfx_interleave_x" },
+//     { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &gfx_transpose,               gfx_i8_kv_handler,   "gfx_transpose" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &hs_fade,                     gfx_i8_kv_handler,   "gfx_hsfade" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &v_fade,                      gfx_i8_kv_handler,   "gfx_vfade" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_frame_rate,              gfx_i8_kv_handler,   "gfx_frame_rate" },
+//     { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &gfx_dimmer_curve,            gfx_i8_kv_handler,   "gfx_dimmer_curve" },
+//     { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &gfx_sat_curve,               gfx_i8_kv_handler,   "gfx_sat_curve" },
     
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_virtual_array_start,     gfx_i8_kv_handler,   "gfx_varray_start" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_virtual_array_length,    gfx_i8_kv_handler,   "gfx_varray_length" },
-};
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_virtual_array_start,     gfx_i8_kv_handler,   "gfx_varray_start" },
+//     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_virtual_array_length,    gfx_i8_kv_handler,   "gfx_varray_length" },
+// };
 
-// void gfx_v_set_params( gfx_params_t *params ){
 
-//     if( params->version != GFX_VERSION ){
+// void gfx_v_get_params( gfx_params_t *params ){
 
-//         return;
+//     params->version             = GFX_VERSION;
+//     params->pix_count           = pix_count;
+//     params->pix_size_x          = pix_size_x;
+//     params->pix_size_y          = pix_size_y;
+//     params->interleave_x        = gfx_interleave_x;
+//     params->transpose           = gfx_transpose;
+//     params->hs_fade             = hs_fade;
+//     params->v_fade              = v_fade;
+//     params->master_dimmer       = gfx_master_dimmer;
+//     params->sub_dimmer          = gfx_sub_dimmer;
+//     params->frame_rate          = gfx_frame_rate;   
+//     params->dimmer_curve        = gfx_dimmer_curve;
+//     params->sat_curve           = gfx_sat_curve;
+//     params->pix_mode            = pixel_u8_get_mode();
+
+//     params->virtual_array_start   = gfx_virtual_array_start;
+//     params->virtual_array_length  = gfx_virtual_array_length;
+//     params->sync_group_hash       = vm_sync_u32_get_sync_group_hash();
+
+//     // override dimmer curve for the Pixie, since it already has curves built in
+//     if( pixel_u8_get_mode() == PIX_MODE_PIXIE ){
+
+//         params->dimmer_curve = 64;
 //     }
-
-//     pix_count                   = params->pix_count;
-//     pix_size_x                  = params->pix_size_x;
-//     pix_size_y                  = params->pix_size_y;
-//     gfx_interleave_x            = params->interleave_x;
-//     gfx_transpose               = params->transpose;
-//     hs_fade                     = params->hs_fade;
-//     v_fade                      = params->v_fade;
-//     gfx_master_dimmer           = params->master_dimmer;
-//     gfx_sub_dimmer              = params->sub_dimmer;
-//     gfx_frame_rate              = params->frame_rate;
-//     gfx_dimmer_curve            = params->dimmer_curve;
-//     gfx_virtual_array_start     = params->virtual_array_start;
-//     gfx_virtual_array_length    = params->virtual_array_length;
-
-//     // we cannot set pix mode via this function
-//     // pix_mode                = params->pix_mode;
-
-
-//     param_error_check();
-
-//     update_vm_timer();
 // }
 
-void gfx_v_get_params( gfx_params_t *params ){
+// uint16_t gfx_u16_get_vm_frame_rate( void ){
 
-    params->version             = GFX_VERSION;
-    params->pix_count           = pix_count;
-    params->pix_size_x          = pix_size_x;
-    params->pix_size_y          = pix_size_y;
-    params->interleave_x        = gfx_interleave_x;
-    params->transpose           = gfx_transpose;
-    params->hs_fade             = hs_fade;
-    params->v_fade              = v_fade;
-    params->master_dimmer       = gfx_master_dimmer;
-    params->sub_dimmer          = gfx_sub_dimmer;
-    params->frame_rate          = gfx_frame_rate;   
-    params->dimmer_curve        = gfx_dimmer_curve;
-    params->sat_curve           = gfx_sat_curve;
-    params->pix_mode            = pixel_u8_get_mode();
+//     return gfx_frame_rate;
+// }
 
-    params->virtual_array_start   = gfx_virtual_array_start;
-    params->virtual_array_length  = gfx_virtual_array_length;
-    params->sync_group_hash       = vm_sync_u32_get_sync_group_hash();
+// void gfx_v_set_pix_count( uint16_t setting ){
 
-    // override dimmer curve for the Pixie, since it already has curves built in
-    if( pixel_u8_get_mode() == PIX_MODE_PIXIE ){
+//     pix_count = setting;
+// }
 
-        params->dimmer_curve = 64;
-    }
-}
+// uint16_t gfx_u16_get_pix_count( void ){
 
-uint16_t gfx_u16_get_vm_frame_rate( void ){
+//     return pix_count;
+// }
 
-    return gfx_frame_rate;
-}
+// void gfx_v_set_master_dimmer( uint16_t setting ){
 
-void gfx_v_set_pix_count( uint16_t setting ){
+//     gfx_master_dimmer = setting;
 
-    pix_count = setting;
-}
+//     gfxlib_v_param_error_check();
 
-uint16_t gfx_u16_get_pix_count( void ){
+//     ATOMIC;
+//     run_flags |= FLAG_RUN_PARAMS;
+//     END_ATOMIC;
+// }
 
-    return pix_count;
-}
+// uint16_t gfx_u16_get_master_dimmer( void ){
 
-void gfx_v_set_master_dimmer( uint16_t setting ){
+//     return gfx_master_dimmer;
+// }
 
-    gfx_master_dimmer = setting;
+// void gfx_v_set_submaster_dimmer( uint16_t setting ){
 
-    param_error_check();
+//     gfx_sub_dimmer = setting;
 
-    ATOMIC;
-    run_flags |= FLAG_RUN_PARAMS;
-    END_ATOMIC;
-}
+//     gfxlib_v_param_error_check();
 
-uint16_t gfx_u16_get_master_dimmer( void ){
+//     ATOMIC;
+//     run_flags |= FLAG_RUN_PARAMS;
+//     END_ATOMIC;
+// }
 
-    return gfx_master_dimmer;
-}
+// uint16_t gfx_u16_get_submaster_dimmer( void ){
 
-void gfx_v_set_submaster_dimmer( uint16_t setting ){
-
-    gfx_sub_dimmer = setting;
-
-    param_error_check();
-
-    ATOMIC;
-    run_flags |= FLAG_RUN_PARAMS;
-    END_ATOMIC;
-}
-
-uint16_t gfx_u16_get_submaster_dimmer( void ){
-
-    return gfx_sub_dimmer;
-}
+//     return gfx_sub_dimmer;
+// }
 
 ISR(GFX_TIMER_CCA_vect){
 
@@ -341,12 +236,12 @@ void gfx_v_init( void ){
     if( pixel_u8_get_mode() == PIX_MODE_ANALOG ){
 
         // override size settings
-        pix_count = 1;
-        pix_size_x = 1;
-        pix_size_y = 1;
+        gfx_v_set_pix_count( 1 );
+        gfx_v_set_size_x( 1 );
+        gfx_v_set_size_x( 1 );
     }
 
-    param_error_check();
+    gfxlib_v_param_error_check();
 
     // debug
     // PIXEL_EN_PORT.DIRSET = ( 1 << PIXEL_EN_PIN );
@@ -410,7 +305,7 @@ void gfx_v_set_sync0( uint16_t frame, uint32_t ts ){
     int32_t frame_offset = (int32_t)vm0_frame_number - (int32_t)frame;
     int32_t time_offset = (int32_t)last_vm0_frame_ts - (int32_t)ts;
 
-    int32_t corrected_time_offset = time_offset + ( frame_offset * gfx_frame_rate );
+    int32_t corrected_time_offset = time_offset + ( frame_offset * gfx_u16_get_vm_frame_rate() );
 
     // we are ahead
     if( corrected_time_offset > 10 ){
@@ -559,7 +454,7 @@ PT_BEGIN( pt );
     // wait until wifi is attached before starting up pixel driver
     THREAD_WAIT_WHILE( pt, !wifi_b_attached() );
 
-    param_error_check();  
+    gfxlib_v_param_error_check();  
 
 
     while(1){

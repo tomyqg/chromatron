@@ -22,7 +22,7 @@
 
 #include "target.h"
 
-#ifdef USE_GFX_LIB
+
 
 #include <inttypes.h>
 #include "bool.h"
@@ -36,36 +36,8 @@
 #include "gfx_lib.h"
 
 
-#ifndef USE_HSV_BRIDGE
-static uint8_t array_red[MAX_PIXELS];
-static uint8_t array_green[MAX_PIXELS];
-static uint8_t array_blue[MAX_PIXELS];
-static uint8_t array_misc[MAX_PIXELS];
-
-static uint16_t pix0_16bit_red;
-static uint16_t pix0_16bit_green;
-static uint16_t pix0_16bit_blue;
-#endif
-
-static uint16_t hue[MAX_PIXELS];
-static uint16_t sat[MAX_PIXELS];
-static uint16_t val[MAX_PIXELS];
-
-static uint16_t target_hue[MAX_PIXELS];
-static uint16_t target_sat[MAX_PIXELS];
-static uint16_t target_val[MAX_PIXELS];
-
-static uint16_t global_hs_fade = 1000;
-static uint16_t global_v_fade = 1000;
-static uint16_t hs_fade[MAX_PIXELS];
-static uint16_t v_fade[MAX_PIXELS];
-
-static int16_t hue_step[MAX_PIXELS];
-static int16_t sat_step[MAX_PIXELS];
-static int16_t val_step[MAX_PIXELS];
-
-static uint16_t pix_master_dimmer = 0;
-static uint16_t pix_sub_dimmer = 0;
+static uint16_t gfx_master_dimmer = 65535;
+static uint16_t gfx_sub_dimmer = 65535;
 static uint16_t target_dimmer = 0;
 static uint16_t current_dimmer = 0;
 static int16_t dimmer_step = 0;
@@ -77,8 +49,8 @@ static uint16_t pix_size_y;
 static bool pix_interleave_x;
 static bool pix_transpose;
 
-static uint8_t pix_array_count;
-static gfx_pixel_array_t *pix_arrays;
+static uint16_t global_hs_fade = 1000;
+static uint16_t global_v_fade = 1000;
 
 static uint16_t virtual_array_start;
 static uint16_t virtual_array_length;
@@ -86,142 +58,52 @@ static uint8_t virtual_array_sub_position;
 static uint32_t scaled_pix_count;
 static uint32_t scaled_virtual_array_length;
 
-static uint16_t gfx_frame_rate = 100;
 
 static uint8_t dimmer_curve = GFX_DIMMER_CURVE_DEFAULT;
 static uint8_t sat_curve = GFX_SAT_CURVE_DEFAULT;
 
+static uint16_t gfx_frame_rate = 100;
 
 #define DIMMER_LOOKUP_SIZE 256
 static uint16_t dimmer_lookup[DIMMER_LOOKUP_SIZE];
 static uint16_t sat_lookup[DIMMER_LOOKUP_SIZE];
 
 
-// smootherstep is an 8 bit lookup table for the function:
-// 6 * pow(x, 5) - 15 * pow(x, 4) + 10 * pow(x, 3)
-static uint8_t smootherstep_lookup[DIMMER_LOOKUP_SIZE] = {
-    #include "smootherstep.csv"
-};
+// #ifdef USE_GFX_LIB
+// uint8_t pixel_u8_get_mode( void ){
 
-#define NOISE_TABLE_SIZE 256
-static uint8_t noise_table[NOISE_TABLE_SIZE];
-
+//     return pix_mode;
+// }
+// #endif
 
 #ifdef GFX_LIB_KV_LINKAGE
 #include "keyvalue.h"
 
+extern uint8_t pixel_u8_get_mode( void ); 
+extern uint32_t vm_sync_u32_get_sync_group_hash( void );
+
 KV_SECTION_META kv_meta_t gfx_lib_info_kv[] = {
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_sub_dimmer,              0,   "gfx_sub_dimmer" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_master_dimmer,           0,   "gfx_master_dimmer" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_x,                  0,   "pix_size_x" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_y,                  0,   "pix_size_y" },
-    { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &pix_interleave_x,            0,   "gfx_interleave_x" },
-    { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &pix_transpose,               0,   "gfx_transpose" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &hs_fade,                     0,   "gfx_hsfade" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &v_fade,                      0,   "gfx_vfade" },
-    { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &dimmer_curve,                0,   "gfx_dimmer_curve" },
-    { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &sat_curve,                   0,   "gfx_sat_curve" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_count,                   gfx_i8_kv_handler,   "pix_count" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_frame_rate,              gfx_i8_kv_handler,   "gfx_frame_rate" },
+
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_sub_dimmer,              gfx_i8_kv_handler,   "gfx_sub_dimmer" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &gfx_master_dimmer,           gfx_i8_kv_handler,   "gfx_master_dimmer" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_x,                  gfx_i8_kv_handler,   "pix_size_x" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &pix_size_y,                  gfx_i8_kv_handler,   "pix_size_y" },
+    { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &pix_interleave_x,            gfx_i8_kv_handler,   "gfx_interleave_x" },
+    { SAPPHIRE_TYPE_BOOL,       0, KV_FLAGS_PERSIST, &pix_transpose,               gfx_i8_kv_handler,   "gfx_transpose" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &global_hs_fade,              gfx_i8_kv_handler,   "gfx_hsfade" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &global_v_fade,               gfx_i8_kv_handler,   "gfx_vfade" },
+    { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &dimmer_curve,                gfx_i8_kv_handler,   "gfx_dimmer_curve" },
+    { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &sat_curve,                   gfx_i8_kv_handler,   "gfx_sat_curve" },
     
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &virtual_array_start,         0,   "gfx_varray_start" },
-    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &virtual_array_length,        0,   "gfx_varray_length" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &virtual_array_start,         gfx_i8_kv_handler,   "gfx_varray_start" },
+    { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &virtual_array_length,        gfx_i8_kv_handler,   "gfx_varray_length" },
 };
 #endif
 
 
-static void compute_dimmer_lookup( void ){
-
-    float curve_exp = (float)dimmer_curve / 64.0;
-
-    for( uint32_t i = 0; i < DIMMER_LOOKUP_SIZE; i++ ){
-
-        float input = ( (float)( i << 8 ) ) / 65535.0;
-
-        dimmer_lookup[i] = (uint16_t)( pow( input, curve_exp ) * 65535.0 );
-    }
-}
-
-static void compute_sat_lookup( void ){
-
-    float curve_exp = (float)sat_curve / 64.0;
-
-    for( uint32_t i = 0; i < DIMMER_LOOKUP_SIZE; i++ ){
-
-        float input = ( (float)( i << 8 ) ) / 65535.0;
-
-        sat_lookup[i] = (uint16_t)( pow( input, curve_exp ) * 65535.0 );
-    }
-}
-
-static void setup_master_array( void ){
-
-    // check if pixel arrays are configured
-    if( pix_arrays == 0 ){
-
-        return;
-    }
-
-    pix_arrays[0].reverse = FALSE;
-    pix_arrays[0].index = 0;
-    pix_arrays[0].count = pix_count;
-    pix_arrays[0].size_x = pix_size_x;
-    pix_arrays[0].size_y = pix_size_y;    
-}
-
-static void update_master_fader( void ){
-
-    uint16_t fade_steps = global_v_fade / FADER_RATE;
-
-    if( fade_steps <= 1 ){
-
-        fade_steps = 2;
-    }
-
-    target_dimmer = ( (uint32_t)pix_master_dimmer * (uint32_t)pix_sub_dimmer ) / 65536;
-
-    int32_t diff = (int32_t)target_dimmer - (int32_t)current_dimmer;
-    int32_t step = diff / fade_steps;
-
-    if( step > 32768 ){
-
-        step = 32768;
-    }
-    else if( step < -32767 ){
-
-        step = -32767;
-    }
-    else if( step == 0 ){
-
-        if( diff >= 0 ){
-
-            step = 1;
-        }
-        else{
-
-            step = -1;
-        }
-    }
-
-    dimmer_step = step;
-}
-
-// static void sync_db( void ){
-
-//     kvdb_i8_add( __KV__pix_count,                   CATBUS_TYPE_UINT16, 1, &pix_count,                 sizeof(pix_count)            );
-//     kvdb_i8_add( __KV__pix_size_x,                  CATBUS_TYPE_UINT16, 1, &pix_size_x,                sizeof(pix_size_x)           );
-//     kvdb_i8_add( __KV__pix_size_y,                  CATBUS_TYPE_UINT16, 1, &pix_size_y,                sizeof(pix_size_y)           );
-//     kvdb_i8_add( __KV__pix_mode,                    CATBUS_TYPE_UINT8,  1, &pix_mode,                  sizeof(pix_mode)             );
-//     kvdb_i8_add( __KV__gfx_hsfade,                  CATBUS_TYPE_UINT16, 1, &global_hs_fade,            sizeof(global_hs_fade)       );
-//     kvdb_i8_add( __KV__gfx_vfade,                   CATBUS_TYPE_UINT16, 1, &global_v_fade,             sizeof(global_v_fade)        );
-//     kvdb_i8_add( __KV__gfx_interleave_x,            CATBUS_TYPE_BOOL,   1, &pix_interleave_x,          sizeof(pix_interleave_x)     );
-//     kvdb_i8_add( __KV__gfx_transpose,               CATBUS_TYPE_BOOL,   1, &pix_transpose,             sizeof(pix_transpose)        );
-//     kvdb_i8_add( __KV__gfx_master_dimmer,           CATBUS_TYPE_UINT16, 1, &pix_master_dimmer,         sizeof(pix_master_dimmer)    );
-//     kvdb_i8_add( __KV__gfx_sub_dimmer,              CATBUS_TYPE_UINT16, 1, &pix_sub_dimmer,            sizeof(pix_sub_dimmer)       );
-//     kvdb_i8_add( __KV__gfx_frame_rate,              CATBUS_TYPE_UINT16, 1, &gfx_frame_rate,            sizeof(gfx_frame_rate)       );
-//     kvdb_i8_add( __KV__gfx_virtual_array_start,     CATBUS_TYPE_UINT16, 1, &virtual_array_start,       sizeof(virtual_array_start)  );
-//     kvdb_i8_add( __KV__gfx_virtual_array_length,    CATBUS_TYPE_UINT16, 1, &virtual_array_length,      sizeof(virtual_array_length) );
-// }
-
-static void param_error_check( void ){
+void gfxlib_v_param_error_check( void ){
 
     // error check
     if( pix_count > MAX_PIXELS ){
@@ -281,16 +163,66 @@ static void param_error_check( void ){
     }
 }
 
-void gfx_v_set_vm_frame_rate( uint16_t frame_rate ){
+static void compute_dimmer_lookup( void ){
 
-    gfx_frame_rate = frame_rate;
+    float curve_exp = (float)dimmer_curve / 64.0;
 
-    param_error_check();
+    for( uint32_t i = 0; i < DIMMER_LOOKUP_SIZE; i++ ){
+
+        float input = ( (float)( i << 8 ) ) / 65535.0;
+
+        dimmer_lookup[i] = (uint16_t)( pow( input, curve_exp ) * 65535.0 );
+    }
 }
 
-uint16_t gfx_u16_get_vm_frame_rate( void ){
+static void compute_sat_lookup( void ){
 
-    return gfx_frame_rate;
+    float curve_exp = (float)sat_curve / 64.0;
+
+    for( uint32_t i = 0; i < DIMMER_LOOKUP_SIZE; i++ ){
+
+        float input = ( (float)( i << 8 ) ) / 65535.0;
+
+        sat_lookup[i] = (uint16_t)( pow( input, curve_exp ) * 65535.0 );
+    }
+}
+
+
+static void update_master_fader( void ){
+
+    uint16_t fade_steps = global_v_fade / FADER_RATE;
+
+    if( fade_steps <= 1 ){
+
+        fade_steps = 2;
+    }
+
+    target_dimmer = ( (uint32_t)gfx_master_dimmer * (uint32_t)gfx_sub_dimmer ) / 65536;
+
+    int32_t diff = (int32_t)target_dimmer - (int32_t)current_dimmer;
+    int32_t step = diff / fade_steps;
+
+    if( step > 32768 ){
+
+        step = 32768;
+    }
+    else if( step < -32767 ){
+
+        step = -32767;
+    }
+    else if( step == 0 ){
+
+        if( diff >= 0 ){
+
+            step = 1;
+        }
+        else{
+
+            step = -1;
+        }
+    }
+
+    dimmer_step = step;
 }
 
 void gfx_v_set_params( gfx_params_t *params ){
@@ -314,13 +246,13 @@ void gfx_v_set_params( gfx_params_t *params ){
     pix_mode                = params->pix_mode;
     global_hs_fade          = params->hs_fade;
     global_v_fade           = params->v_fade;
-    pix_master_dimmer       = params->master_dimmer;
-    pix_sub_dimmer          = params->sub_dimmer;
+    gfx_master_dimmer       = params->master_dimmer;
+    gfx_sub_dimmer          = params->sub_dimmer;
     gfx_frame_rate          = params->frame_rate;
     virtual_array_start     = params->virtual_array_start;
     virtual_array_length    = params->virtual_array_length;
 
-    param_error_check();
+    gfxlib_v_param_error_check();
 
     // only run if dimmer curve is changing
     if( old_dimmer_curve != dimmer_curve ){
@@ -336,8 +268,6 @@ void gfx_v_set_params( gfx_params_t *params ){
 
     update_master_fader();
 
-    // sync_db();
-
     virtual_array_sub_position      = virtual_array_start / pix_count;
     scaled_pix_count                = (uint32_t)pix_count * 65536;
     scaled_virtual_array_length     = (uint32_t)virtual_array_length * 65536;
@@ -351,16 +281,126 @@ void gfx_v_get_params( gfx_params_t *params ){
     params->pix_size_y              = pix_size_y;
     params->interleave_x            = pix_interleave_x;
     params->transpose               = pix_transpose;
-    params->pix_mode                = pix_mode;
     params->hs_fade                 = global_hs_fade;
     params->v_fade                  = global_v_fade;
-    params->master_dimmer           = pix_master_dimmer;
-    params->sub_dimmer              = pix_sub_dimmer;
+    params->master_dimmer           = gfx_master_dimmer;
+    params->sub_dimmer              = gfx_sub_dimmer;
     params->frame_rate              = gfx_frame_rate;
     params->dimmer_curve            = dimmer_curve;
     params->sat_curve               = sat_curve;
+    params->pix_mode                = pixel_u8_get_mode();
+
     params->virtual_array_start     = virtual_array_start;
     params->virtual_array_length    = virtual_array_length;
+    params->sync_group_hash         = vm_sync_u32_get_sync_group_hash();
+
+    // override dimmer curve for the Pixie, since it already has curves built in
+    if( pixel_u8_get_mode() == PIX_MODE_PIXIE ){
+
+        params->dimmer_curve = 64;
+    }
+}
+
+
+void gfx_v_set_vm_frame_rate( uint16_t frame_rate ){
+
+    gfx_frame_rate = frame_rate;
+
+    gfxlib_v_param_error_check();
+}
+
+uint16_t gfx_u16_get_vm_frame_rate( void ){
+
+    return gfx_frame_rate;
+}
+
+void gfx_v_set_pix_count( uint16_t setting ){
+
+    pix_count = setting;
+}
+
+uint16_t gfx_u16_get_pix_count( void ){
+
+    return pix_count;
+}
+
+void gfx_v_set_size_x( uint16_t size ){
+
+    pix_size_x = size;
+}
+
+uint16_t gfx_u16_get_size_x( void ){
+
+    return pix_size_x;
+}
+
+void gfx_v_set_size_y( uint16_t size ){
+
+    pix_size_y = size;
+}
+
+uint16_t gfx_u16_get_size_y( void ){
+
+    return pix_size_y;
+}
+
+
+#ifdef USE_GFX_LIB
+
+#ifndef USE_HSV_BRIDGE
+static uint8_t array_red[MAX_PIXELS];
+static uint8_t array_green[MAX_PIXELS];
+static uint8_t array_blue[MAX_PIXELS];
+static uint8_t array_misc[MAX_PIXELS];
+
+static uint16_t pix0_16bit_red;
+static uint16_t pix0_16bit_green;
+static uint16_t pix0_16bit_blue;
+#endif
+
+static uint16_t hue[MAX_PIXELS];
+static uint16_t sat[MAX_PIXELS];
+static uint16_t val[MAX_PIXELS];
+
+static uint16_t target_hue[MAX_PIXELS];
+static uint16_t target_sat[MAX_PIXELS];
+static uint16_t target_val[MAX_PIXELS];
+
+static uint16_t hs_fade[MAX_PIXELS];
+static uint16_t v_fade[MAX_PIXELS];
+
+static int16_t hue_step[MAX_PIXELS];
+static int16_t sat_step[MAX_PIXELS];
+static int16_t val_step[MAX_PIXELS];
+
+static uint8_t pix_array_count;
+static gfx_pixel_array_t *pix_arrays;
+
+
+
+// smootherstep is an 8 bit lookup table for the function:
+// 6 * pow(x, 5) - 15 * pow(x, 4) + 10 * pow(x, 3)
+static uint8_t smootherstep_lookup[DIMMER_LOOKUP_SIZE] = {
+    #include "smootherstep.csv"
+};
+
+#define NOISE_TABLE_SIZE 256
+static uint8_t noise_table[NOISE_TABLE_SIZE];
+
+
+static void setup_master_array( void ){
+
+    // check if pixel arrays are configured
+    if( pix_arrays == 0 ){
+
+        return;
+    }
+
+    pix_arrays[0].reverse = FALSE;
+    pix_arrays[0].index = 0;
+    pix_arrays[0].count = pix_count;
+    pix_arrays[0].size_x = pix_size_x;
+    pix_arrays[0].size_y = pix_size_y;    
 }
 
 uint16_t urand( int32_t *params, uint16_t param_len ){
@@ -422,56 +462,26 @@ int32_t gfx_i32_lib_call( catbus_hash_t32 func_hash, int32_t *params, uint16_t p
     return 0;
 }
 
-void gfx_v_set_pix_count( uint16_t setting ){
-
-    pix_count = setting;
-}
-
-uint16_t gfx_u16_get_pix_count( void ){
-
-    return pix_count;
-}
-
 void gfx_v_set_master_dimmer( uint16_t setting ){
 
-    pix_master_dimmer = setting;
+    gfx_master_dimmer = setting;
     update_master_fader();
 }
 
 uint16_t gfx_u16_get_master_dimmer( void ){
 
-    return pix_master_dimmer;
+    return gfx_master_dimmer;
 }
 
 void gfx_v_set_submaster_dimmer( uint16_t setting ){
 
-    pix_sub_dimmer = setting;
+    gfx_sub_dimmer = setting;
     update_master_fader();
 }
 
 uint16_t gfx_u16_get_submaster_dimmer( void ){
 
-    return pix_sub_dimmer;
-}
-
-void gfx_v_set_size_x( uint16_t size ){
-
-    pix_size_x = size;
-}
-
-uint16_t gfx_u16_get_size_x( void ){
-
-    return pix_size_x;
-}
-
-void gfx_v_set_size_y( uint16_t size ){
-
-    pix_size_y = size;
-}
-
-uint16_t gfx_u16_get_size_y( void ){
-
-    return pix_size_y;
+    return gfx_sub_dimmer;
 }
 
 void gfx_v_set_interleave_x( bool setting ){
@@ -1638,7 +1648,7 @@ void gfx_v_process_faders( void ){
 
 void gfxlib_v_init( void ){
 
-    param_error_check();
+    gfxlib_v_param_error_check();
 
     compute_dimmer_lookup();
     compute_sat_lookup();

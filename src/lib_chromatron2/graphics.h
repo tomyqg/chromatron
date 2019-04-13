@@ -28,7 +28,6 @@
 #include "wifi_cmd.h"
 #include "keyvalue.h"
 
-
 void gfx_v_init( void );
 bool gfx_b_running( void );
 uint16_t gfx_u16_get_frame_number( void );

@@ -52,6 +52,18 @@ KV_SECTION_META kv_meta_t gfx_info_kv[] = {
 PT_THREAD( gfx_control_thread( pt_t *pt, void *state ) );
 
 
+
+int8_t gfx_i8_kv_handler(
+    kv_op_t8 op,
+    catbus_hash_t32 hash,
+    void *data,
+    uint16_t len )
+{
+
+    return 0;
+}
+
+
 void gfx_v_init( void ){
 
     if( pixel_u8_get_mode() == PIX_MODE_ANALOG ){

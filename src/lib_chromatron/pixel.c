@@ -47,6 +47,7 @@
 
 static bool pix_dither;
 static uint8_t pix_mode;
+static uint16_t pix_count;
 
 static uint8_t pix_clock;
 static uint8_t pix_rgb_order;
@@ -88,7 +89,17 @@ int8_t pix_i8_kv_handler(
         }
         else if( hash == __KV__pix_count ){
 
-            gfx_v_set_pix_count( *(uint16_t *)data );
+            if( pix_count > MAX_PIXELS ){
+
+                pix_count = MAX_PIXELS;
+            }
+            else if( pix_count == 0 ){
+
+                // this is necessary to prevent divide by 0 errors.
+                // also, 0 pixels doesn't really make sense in a
+                // pixel graphics library, does it?
+                pix_count = 1;
+            }
         }   
         else{
 
@@ -101,6 +112,7 @@ int8_t pix_i8_kv_handler(
 }
 
 KV_SECTION_META kv_meta_t pixel_info_kv[] = {
+    { SAPPHIRE_TYPE_UINT16,  0, KV_FLAGS_PERSIST,                 &pix_count,           pix_i8_kv_handler,    "pix_count" },
     { SAPPHIRE_TYPE_UINT8,   0, KV_FLAGS_PERSIST,                 &pix_rgb_order,       0,                    "pix_rgb_order" },
     { SAPPHIRE_TYPE_UINT8,   0, KV_FLAGS_PERSIST,                 &pix_clock,           pix_i8_kv_handler,    "pix_clock" },
     { SAPPHIRE_TYPE_BOOL,    0, KV_FLAGS_PERSIST,                 &pix_dither,          0,                    "pix_dither" },

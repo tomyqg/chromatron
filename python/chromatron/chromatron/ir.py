@@ -1447,6 +1447,7 @@ class Builder(object):
             pass
 
         self.funcs = {}
+        self.func_calls = {}
         self.locals = {}
         self.globals = {}
         self.objects = {}
@@ -2213,7 +2214,13 @@ class Builder(object):
 
         ir = irCallPlaceholder(func_name, params, result, lineno=lineno)
 
-        self.append_node(ir)        
+        self.append_node(ir)
+
+        # record this call
+        if func_name not in self.func_calls:
+            self.func_calls[func_name] = []
+            
+        self.func_calls[func_name].append(ir)
 
         return result
 

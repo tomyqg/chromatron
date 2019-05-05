@@ -270,10 +270,23 @@ class cg1Module(cg1Node):
 
 
         # collect funcs
-        funcs = [a for a in self.body if isinstance(a, cg1Func)]
+        funcs = {v.name: v for v in self.body if isinstance(v, cg1Func)}
 
-        for code in funcs:
-            code.build(builder)
+        # build functions starting with our entry points:
+        # init() is first
+        # followed by loop()
+        # folowed by everything else
+
+        if 'init' in funcs:
+            funcs['init'].build(builder)
+            del funcs['init']
+
+        if 'loop' in funcs:
+            funcs['loop'].build(builder)
+            del funcs['loop']
+
+        for func in funcs.values():
+            func.build(builder)
 
         return builder.finish_module()
 
@@ -294,8 +307,8 @@ class cg1Func(cg1CodeNode):
     def build(self, builder):
         func = builder.func(self.name, lineno=self.lineno)
 
-        for p in self.params:
-            builder.add_func_arg(func, p.name, p.type, [], lineno=self.lineno)
+        # for p in self.params:
+            # builder.add_func_arg(func, p.name, p.type, [], lineno=self.lineno)
 
 
         for node in self.body:

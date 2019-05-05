@@ -953,6 +953,23 @@ class irVectorAssign(IR):
         else:
             return insVectorMov(self.target.generate(), self.value.generate())
 
+class irCallPlaceholder(IR):
+    def __init__(self, target, params, result, **kwargs):
+        super(irCallPlaceholder, self).__init__(**kwargs)
+        self.target = target
+        self.params = params
+        self.result = result
+
+    def __str__(self):
+        params = params_to_string(self.params)
+        s = 'TEMP_CALL %s(%s) -> %s' % (self.target, params, self.result)
+
+        return s
+
+    def generate(self):
+        raise Exception("Unresolved call")
+
+
 class irCall(IR):
     def __init__(self, target, params, args, result, **kwargs):
         super(irCall, self).__init__(**kwargs)
@@ -2193,6 +2210,13 @@ class Builder(object):
         
     def call(self, func_name, params, lineno=None):
         result = self.add_temp(data_type='gfx16', lineno=lineno)
+
+        ir = irCallPlaceholder(func_name, params, result, lineno=lineno)
+
+        self.append_node(ir)        
+
+        return result
+
 
         try:
             args = self.funcs[func_name].params

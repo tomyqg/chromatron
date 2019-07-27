@@ -27,7 +27,14 @@
 
 #define HW_NAME "STM32H7"
 
-#define BOARD_CHROMATRONX
+// #define BOARD_CHROMATRONX
+
+// set crystal speed
+#ifdef BOARD_CHROMATRONX
+#define HSE_VALUE    ((int32_t)8000000)
+#else
+#define HSE_VALUE    ((int32_t)16000000)
+#endif
 
 // modules
 #define ENABLE_CATBUS_LINK
@@ -106,7 +113,7 @@
 #define TOTAL_PAGES ( N_APP_PAGES + 32 )
 
 
-#if defined(DEBUG) || defined(NO_BOOT)
+#if (defined(DEBUG) || defined(NO_BOOT)) && !defined(BOOTLOADER)
 	#define FLASH_START 	( 0x08000000 + 0 )
 #else
 	#define FLASH_START 	( 0x08000000 + 0x20000 )

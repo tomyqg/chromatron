@@ -28,7 +28,7 @@
 #include "datetime_struct.h"
 #include "target.h"
 
-#define VM_ISA_VERSION              11
+#define VM_ISA_VERSION              12
 
 #define RETURN_VAL_ADDR             0
 #define PIX_ARRAY_ADDR              1
@@ -178,7 +178,7 @@ typedef struct __attribute__((packed)){
     uint16_t length;
 } vm_string_t;
 
-typedef struct __attribute__((packed)){ // MUST be 32 bit aligned!
+typedef struct __attribute__((packed, aligned(4))){ // MUST be 32 bit aligned!
     uint16_t code_start;
     uint16_t data_start;
     uint16_t prog_size;

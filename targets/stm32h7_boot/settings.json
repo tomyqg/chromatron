@@ -16,10 +16,13 @@
         "-D__FPU_PRESENT",
         "-DUSE_FULL_LL_DRIVER",
         "-DUSE_HAL_DRIVER",
+        "-DBOOTLOADER",
+        "-DOS_USE_TRACE_SEMIHOSTING_DEBUG",
+        "-DTRACE",
         "-DARM",
-        "-DNO_BOOT",
+        "-DDEBUG",
         "-g",
-        "-O2",
+        "-Og",
         "-mno-unaligned-access",
         "-fstack-usage",
         "-funsigned-char",
@@ -85,7 +88,7 @@
     "OS_PROJECT": "sapphire",
     "LOADER_PROJECT": "loader_stm32h7",
 
-    "FW_INFO_ADDR": "0x08000400",
+    "FW_INFO_ADDR": "0x08020400",
 
     "BUILD_NUMBER_FILE": "buildnumber.txt",
 

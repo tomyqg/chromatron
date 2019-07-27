@@ -163,7 +163,7 @@ static int8_t mem_i8_kv_handler(
 
     if( op == KV_OP_GET ){
 
-        uint16_t a;
+        uint16_t a = 0;
 
         if( hash == __KV__mem_max_handles ){
 

@@ -56,6 +56,20 @@ static io_port_t *sda_port = &IO_PIN1_PORT;
 static uint8_t sda_pin = ( 1 << IO_PIN1_PIN );
 
 
+static void wait_while_clock_stretch( void ){
+
+    volatile uint8_t c;
+    volatile uint32_t timeout = 10000;    
+
+    do{
+        c = scl_port->IN & scl_pin;
+
+        timeout--;
+
+    } while( ( c == 0 ) && ( timeout > 0 ) );
+}
+
+
 #define SDA_HIGH() ( sda_port->OUTSET = sda_pin )
 #define SDA_LOW() ( sda_port->OUTCLR = sda_pin )
 
@@ -83,6 +97,7 @@ static void send_bit( uint8_t b ){
     I2C_DELAY_1();
 
     SCL_HIGH();
+    wait_while_clock_stretch();
 
     I2C_DELAY_2();
     
@@ -98,6 +113,7 @@ static bool read_bit( void ){
     I2C_DELAY_1();
 
     SCL_HIGH();
+    wait_while_clock_stretch();
 
     I2C_DELAY_2();
     
@@ -232,6 +248,7 @@ static void i2c_v_start( void ){
 
     SDA_HIGH();
     SCL_HIGH();
+    wait_while_clock_stretch();
     I2C_DELAY();
 
     SDA_LOW();
@@ -249,6 +266,7 @@ static void i2c_v_stop( void ){
     I2C_DELAY();
 
     SCL_HIGH();
+    wait_while_clock_stretch();
     I2C_DELAY();
 
     SDA_HIGH();
@@ -308,37 +326,54 @@ void i2c_v_read( uint8_t dev_addr, uint8_t *dst, uint8_t len ){
     i2c_v_stop();
 }
 
-void i2c_v_mem_write( uint8_t dev_addr, uint32_t mem_addr, uint8_t addr_size, const uint8_t *src, uint8_t len ){
+void i2c_v_mem_write( uint8_t dev_addr, uint16_t mem_addr, uint8_t addr_size, const uint8_t *src, uint8_t len, uint16_t delay_ms ){
 
     i2c_v_start();
 
     i2c_v_send_address( dev_addr, TRUE );
 
-    uint8_t *addr = (uint8_t *)&mem_addr;
-
-    while( addr_size > 0 ){
-
-        i2c_v_send_byte( *addr );
-        addr++;
+    if( addr_size == 1 ){
+        
+        i2c_v_send_byte( mem_addr );
     }
+    else if( addr_size == 2 ){
+        
+        i2c_v_send_byte( mem_addr >> 8 );        
+        i2c_v_send_byte( mem_addr & 0xff );        
+    }
+    else{
+
+        ASSERT( FALSE );
+    }
+
+    _delay_ms( delay_ms );
 
     i2c_v_write( dev_addr, src, len );
 }
 
-void i2c_v_mem_read( uint8_t dev_addr, uint32_t mem_addr, uint8_t addr_size, uint8_t *dst, uint8_t len ){
+void i2c_v_mem_read( uint8_t dev_addr, uint16_t mem_addr, uint8_t addr_size, uint8_t *dst, uint8_t len, uint16_t delay_ms ){
     
     i2c_v_start();
 
     i2c_v_send_address( dev_addr, TRUE );
 
-    uint8_t *addr = (uint8_t *)&mem_addr;
-
-    while( addr_size > 0 ){
-
-        i2c_v_send_byte( *addr );
-        addr++;
+    if( addr_size == 1 ){
+        
+        i2c_v_send_byte( mem_addr );
     }
+    else if( addr_size == 2 ){
+        
+        i2c_v_send_byte( mem_addr >> 8 );        
+        i2c_v_send_byte( mem_addr & 0xff );        
+    }
+    else{
+
+        ASSERT( FALSE );
+    }
+
+    _delay_ms( delay_ms );
 
     i2c_v_read( dev_addr, dst, len );   
 }
+
 

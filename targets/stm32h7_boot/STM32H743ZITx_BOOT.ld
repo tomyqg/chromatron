@@ -50,7 +50,7 @@ RAM_NO_CACHE (xrw)  : ORIGIN = 0x24078000, LENGTH = 32K
 RAM_D2 (xrw)        : ORIGIN = 0x30000000, LENGTH = 284K
 RAM_D3 (xrw)        : ORIGIN = 0x38000000, LENGTH = 64K
 ITCMRAM (xrw)       : ORIGIN = 0x00000000, LENGTH = 64K
-FLASH (rx)          : ORIGIN = 0x08020000, LENGTH = 1920K
+FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 128K
 }
 
 /* Define output sections */
@@ -65,37 +65,9 @@ SECTIONS
   } >FLASH
 
   /* The program code and other data goes into FLASH */
-  .text 0x08020400:
+  .text :
   {
     . = ALIGN(4);
-
-    /* Sapphire firmware info section */
-    *(.fwinfo)
-    KEEP(*(.fwinfo))
-
-    /* Key-value service meta data sections */
-    *(.kv_meta_start)
-    KEEP(*(.kv_meta_start))
-    *(.kv_meta)
-    KEEP(*(.kv_meta))
-    *(.kv_meta_end)
-    KEEP(*(.kv_meta_end))
-
-    /* Presence service meta data sections */
-    *(.service_start)
-    KEEP(*(.service_start))
-    *(.service)
-    KEEP(*(.service))
-    *(.service_end)
-    KEEP(*(.service_end))
-
-    /* Routing table entry sections */
-    *(.routing_start)
-    KEEP(*(.routing_start))
-    *(.routing)
-    KEEP(*(.routing))
-    *(.routing_end)
-    KEEP(*(.routing_end))
 
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
@@ -212,18 +184,6 @@ SECTIONS
     . = ALIGN(4);
     _ebootdata = .;        /* define a global symbol at bootdata end */
   } >RAM_NO_CACHE
-
-  /* Heap */
-  .memory_heap (NOLOAD):
-  {
-    . = ALIGN(8);
-    _smemory_heap = .;        /* create a global symbol at memory_heap start */
-    *(.memory_heap)           /* .memory_heap sections */
-    *(.memory_heap*)          /* .memory_heap* sections */
-
-    . = ALIGN(4);
-    _ememory_heap = .;        /* define a global symbol at memory_heap end */
-  } >DTCMRAM
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

@@ -210,6 +210,7 @@ PT_BEGIN( pt );
     // copy firmware to file
     // ffs_fw_i32_write( 2, 0, wifi_firmware, sizeof(wifi_firmware) );
 
+    rx_dma_buffer[0] = WIFI_COMM_IDLE;
 
     while(1){
 
@@ -237,7 +238,7 @@ PT_BEGIN( pt );
                 trace_printf("timeout1\r\n");
 
                 timeouts++;
-                continue;
+                THREAD_RESTART( pt );
             }
 
             thread_v_set_alarm( tmr_u32_get_system_time_ms() + WIFI_THREAD_TIMEOUT );
@@ -250,7 +251,7 @@ PT_BEGIN( pt );
                 trace_printf("timeout2\r\n");
 
                 timeouts++;
-                continue;
+                THREAD_RESTART( pt );
             }
 
             header = (wifi_data_header_t *)&rx_dma_buffer[1];
@@ -265,18 +266,26 @@ PT_BEGIN( pt );
                 trace_printf("timeout3\r\n");
 
                 timeouts++;
-                continue;
+                THREAD_RESTART( pt );
             }
 
             current_rx_bytes += sizeof(wifi_data_header_t) + 1 + header->len;
 
+            // copy to process buffer
             memcpy( rx_buf, rx_dma_buffer, sizeof(rx_buf) );
 
+            // clear control byte
+            rx_dma_buffer[0] = WIFI_COMM_IDLE;
+
+            // signal ESP our receive buffer is ready
             hal_wifi_v_set_rx_ready();
 
             buffer_busy = TRUE;;
 
+            // set control byte for wifi process
             control_byte = WIFI_COMM_DATA;
+
+            // signal thread
             thread_v_signal( WIFI_SIGNAL );
         }   
     }
@@ -525,7 +534,6 @@ void hal_wifi_v_enter_boot_mode( void ){
     _delay_ms(WIFI_RESET_DELAY_MS);
 
 
-// pin connection missing
     GPIO_InitStruct.Pin         = WIFI_RX_Ready_Pin;
     GPIO_InitStruct.Mode        = GPIO_MODE_INPUT;
     GPIO_InitStruct.Speed       = GPIO_SPEED_FREQ_LOW;
@@ -537,8 +545,7 @@ void hal_wifi_v_enter_boot_mode( void ){
     GPIO_InitStruct.Speed       = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Pull        = GPIO_NOPULL;
     HAL_GPIO_Init(WIFI_BOOT_GPIO_Port, &GPIO_InitStruct);
-
-    HAL_GPIO_WritePin(WIFI_PD_GPIO_Port, WIFI_PD_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(WIFI_BOOT_GPIO_Port, WIFI_BOOT_Pin, GPIO_PIN_RESET);
 
     GPIO_InitStruct.Pin         = WIFI_SS_Pin;
     GPIO_InitStruct.Mode        = GPIO_MODE_OUTPUT_PP;

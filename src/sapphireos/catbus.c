@@ -557,7 +557,7 @@ static void _catbus_v_add_to_send_list( catbus_hash_t32 source_hash, catbus_hash
             ( memcmp( raddr, &entry->raddr, sizeof(sock_addr_t) ) == 0 ) ){
 
             // reset TTL
-            entry->ttl = 32;
+            entry->ttl = CATBUS_LINK_TIMEOUT;
 
             return;
         }
@@ -576,7 +576,7 @@ static void _catbus_v_add_to_send_list( catbus_hash_t32 source_hash, catbus_hash
     entry.source_hash   = source_hash;
     entry.dest_hash     = dest_hash;
     entry.raddr         = *raddr;
-    entry.ttl           = 32;
+    entry.ttl           = CATBUS_LINK_TIMEOUT;
 
     ln = list_ln_create_node2( &entry, sizeof(entry), MEM_TYPE_CATBUS_SEND );
 
@@ -584,6 +584,8 @@ static void _catbus_v_add_to_send_list( catbus_hash_t32 source_hash, catbus_hash
 
         return;
     }
+
+    log_v_debug_P( PSTR("Adding %d.%d.%d.%d to send list"), raddr->ipaddr.ip3, raddr->ipaddr.ip2, raddr->ipaddr.ip1, raddr->ipaddr.ip0 );
 
     list_v_insert_tail( &send_list, ln );
 }
@@ -600,6 +602,8 @@ static void _catbus_v_delete_send_entry( sock_addr_t *raddr ){
 
         // check if entry matches
         if( ( memcmp( raddr, &entry->raddr, sizeof(sock_addr_t) ) == 0 ) ){
+
+            log_v_debug_P( PSTR("Remove %d.%d.%d.%d from send list"), entry->raddr.ipaddr.ip3, entry->raddr.ipaddr.ip2, entry->raddr.ipaddr.ip1, entry->raddr.ipaddr.ip0 );
 
             // delete entry
             list_v_remove( &send_list, ln );
@@ -622,6 +626,8 @@ static void _catbus_v_delete_rx_entry( sock_addr_t *raddr ){
 
         // check if entry matches
         if( ( memcmp( raddr, &entry->raddr, sizeof(sock_addr_t) ) == 0 ) ){
+
+            log_v_debug_P( PSTR("Remove %d.%d.%d.%d from RX list"), entry->raddr.ipaddr.ip3, entry->raddr.ipaddr.ip2, entry->raddr.ipaddr.ip1, entry->raddr.ipaddr.ip0 );
 
             // delete entry
             list_v_remove( &receive_cache, ln );
@@ -987,6 +993,8 @@ PT_BEGIN( pt );
             // check if expired
             if( send_state->ttl < 0 ){
 
+                log_v_debug_P( PSTR("Timed out %d.%d.%d.%d from send list"), send_state->raddr.ipaddr.ip3, send_state->raddr.ipaddr.ip2, send_state->raddr.ipaddr.ip1, send_state->raddr.ipaddr.ip0 );
+
                 // get next
                 list_node_t remove_ln = sender_ln;
                 sender_ln = list_ln_next( sender_ln );
@@ -1041,7 +1049,7 @@ PT_BEGIN( pt );
             msg->ntp_timestamp = send_state->ntp_timestamp;
 
             #ifdef ENABLE_TIME_SYNC
-            if(time_b_is_sync() ){
+            if( time_b_is_sync() ){
                 
                 msg->flags |= CATBUS_MSG_DATA_FLAG_TIME_SYNC;
             }
@@ -1060,10 +1068,25 @@ PT_BEGIN( pt );
                 msg->data.meta.count + 1, 
                 &msg->data.data );
 
-            sock_i16_sendto_m( sock, h, &send_state->raddr );      
+            // send message
+            if( sock_i16_sendto_m( sock, h, &send_state->raddr ) < 0 ){
+
+                // send failed!
+
+                // set flag so we try again
+                send_state->flags |= SEND_ENTRY_FLAGS_PUBLISH;
+
+                log_v_debug_P( PSTR("publish failed") );
+
+                // delay, hopefully the tx queue will be less busy
+                TMR_WAIT( pt, 50 );                
+
+                // send us back to top of loop, so we try this again
+                continue;
+            }
 
 
-            TMR_WAIT( pt, 5 );
+            TMR_WAIT( pt, 10 );
 
     next:
             sender_ln = list_ln_next( sender_ln );
@@ -1434,6 +1457,9 @@ PT_BEGIN( pt );
             goto end;
         }
 
+        sock_addr_t raddr;
+        sock_v_get_raddr( sock, &raddr );
+
         // log_v_debug_P( PSTR("%d"), header->msg_type );
 
         // DISCOVERY MESSAGES
@@ -1454,9 +1480,6 @@ PT_BEGIN( pt );
                 goto end;
             }
 
-            sock_addr_t raddr;
-            sock_v_get_raddr( sock, &raddr );
-
             _catbus_v_send_announce( &raddr, msg->header.transaction_id );
         }
         else if( header->msg_type == CATBUS_MSG_TYPE_SHUTDOWN ){
@@ -1464,9 +1487,6 @@ PT_BEGIN( pt );
             // catbus_msg_shutdown_t *msg = (catbus_msg_shutdown_t *)header;
 
             #ifdef ENABLE_CATBUS_LINK
-            sock_addr_t raddr;
-            sock_v_get_raddr( sock, &raddr );
-
             // delete cache entries for link system
             _catbus_v_delete_send_entry( &raddr );
             _catbus_v_delete_rx_entry( &raddr );
@@ -1771,19 +1791,26 @@ PT_BEGIN( pt );
 
             catbus_msg_link_t *msg = (catbus_msg_link_t *)header;
 
-            if( ( msg->flags & CATBUS_LINK_FLAGS_DEST ) == 0 ){
+            if( ( msg->flags & CATBUS_LINK_FLAGS_SOURCE ) &&
+                ( msg->flags & CATBUS_LINK_FLAGS_DEST ) ){
+
+                log_v_debug_P( PSTR("bad flags") );
+
+                // invalid flag combination
+                goto end;
+            }
+
+
+            // check link type
+
+            // source link 
+            if( msg->flags & CATBUS_LINK_FLAGS_SOURCE ){
 
                 // check if we match query
                 if( !_catbus_b_query_self( &msg->query ) ){
 
                     goto end;
                 }
-            }
-
-            // check link type
-
-            // source link 
-            if( msg->flags & CATBUS_LINK_FLAGS_SOURCE ){
 
                 // check if we have the destination key
                 if( kv_i16_search_hash( msg->dest_hash ) < 0 ){
@@ -1794,9 +1821,7 @@ PT_BEGIN( pt );
                 // change link flags and echo message back to sender
                 msg->flags = CATBUS_LINK_FLAGS_DEST;
 
-                sock_addr_t raddr;
-                sock_v_get_raddr( sock, &raddr );
-
+                // set up destination
                 raddr.port = msg->data_port;
 
                 msg->data_port = sock_u16_get_lport( sock );
@@ -1808,17 +1833,15 @@ PT_BEGIN( pt );
                 sock_i16_sendto( sock, (uint8_t *)msg, sizeof(catbus_msg_link_t), &raddr );   
             }
             // receiver link
-            else{
+            else if( msg->flags & CATBUS_LINK_FLAGS_DEST ){
 
                 // check if we have the source key:
                 if( kv_i16_search_hash( msg->source_hash ) < 0 ){
 
                     goto end;
                 }
-
-                sock_addr_t raddr;
-                sock_v_get_raddr( sock, &raddr );
-
+                
+                // set up destination
                 raddr.port = msg->data_port;
 
                 _catbus_v_add_to_send_list( msg->source_hash, msg->dest_hash, &raddr );
@@ -1832,9 +1855,6 @@ PT_BEGIN( pt );
             }
 
             catbus_msg_link_data_t *msg = (catbus_msg_link_data_t *)header;
-
-            sock_addr_t raddr;
-            sock_v_get_raddr( sock, &raddr );
 
             // look for cache entry
             list_node_t ln = receive_cache.head;
@@ -1851,7 +1871,7 @@ PT_BEGIN( pt );
                     ( entry->dest_hash == msg->dest_hash ) ){
 
                     // reset ttl
-                    entry->ttl = 20;
+                    entry->ttl = CATBUS_LINK_TIMEOUT;
 
                     update = TRUE;
 
@@ -1870,9 +1890,11 @@ PT_BEGIN( pt );
                 new_entry.raddr         = raddr;
                 new_entry.dest_hash     = msg->dest_hash;
                 new_entry.sequence      = 0;
-                new_entry.ttl           = 20;
+                new_entry.ttl           = CATBUS_LINK_TIMEOUT;
 
                 entry = &new_entry;
+
+                log_v_debug_P( PSTR("Add %d.%d.%d.%d to RX list. Hash: 0x%0lx"), raddr.ipaddr.ip3, raddr.ipaddr.ip2, raddr.ipaddr.ip1, raddr.ipaddr.ip0, msg->dest_hash );
 
                 ln = list_ln_create_node2( &new_entry, sizeof(new_entry), MEM_TYPE_CATBUS_RX_CACHE );     
                 
@@ -2461,6 +2483,8 @@ PT_BEGIN( pt );
             entry->ttl -= CATBUS_ANNOUNCE_INTERVAL;
 
             if( entry->ttl < 0 ){
+
+                log_v_debug_P( PSTR("Timed out %d.%d.%d.%d from RX list"), entry->raddr.ipaddr.ip3, entry->raddr.ipaddr.ip2, entry->raddr.ipaddr.ip1, entry->raddr.ipaddr.ip0 );
 
                 list_v_remove( &receive_cache, ln );
                 list_v_release_node( ln );

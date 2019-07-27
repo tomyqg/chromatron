@@ -449,6 +449,14 @@ messages = {
 }
 
 
+def lookup_msg(msg):
+    try:
+        return messages[msg]
+
+    except KeyError:
+        return "Unknown msg"
+
+
 def deserialize(buf):
     msg_id = ord(buf[CATBUS_MSG_TYPE_OFFSET])
 

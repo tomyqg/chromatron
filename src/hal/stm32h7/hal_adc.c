@@ -98,6 +98,11 @@ PT_THREAD( hal_adc_thread( pt_t *pt, void *state ) );
 
 void adc_v_init( void ){
 
+	#if IO_PIN_ANALOG_COUNT == 0
+	return;
+	#endif
+
+
 	__HAL_RCC_ADC12_CLK_ENABLE();
 	__HAL_RCC_ADC3_CLK_ENABLE();
 
@@ -240,6 +245,10 @@ PT_END( pt );
 
 static int16_t _adc_i16_internal_read( uint8_t channel ){
 
+	#if IO_PIN_ANALOG_COUNT == 0
+	return 0;
+	#endif
+
 	ASSERT( channel < adc_channel_count );
 
 	GPIO_InitTypeDef gpio_init;
@@ -326,6 +335,10 @@ uint16_t adc_u16_read_supply_voltage( void ){
 }
 
 uint16_t adc_u16_read_vcc( void ){
+
+	#if IO_PIN_ANALOG_COUNT == 0
+	return 0;
+	#endif
 
 	uint16_t vref_int = adc_u16_read_raw( ADC_CHANNEL_REF );
 	// this is nominally 1.2V

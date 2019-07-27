@@ -29,7 +29,7 @@ import pprint
 
 source_code = []
 
-VM_ISA_VERSION  = 11
+VM_ISA_VERSION  = 12
 
 FILE_MAGIC      = 0x20205846 # 'FX  '
 PROGRAM_MAGIC   = 0x474f5250 # 'PROG'
@@ -44,6 +44,7 @@ DATA_LEN = 4
 
 
 ARRAY_FUNCS = ['len', 'min', 'max', 'avg', 'sum']
+THREAD_FUNCS = ['start_thread', 'stop_thread', 'thread_running']
 
 DAY_OF_WEEK = {'sunday':    0,
                'monday':    1,
@@ -297,7 +298,11 @@ class irConst(irVar):
         elif self.name == 'False':
             self.value = 0
         elif self.type == 'f16':
-            self.value = int(float(self.name) * 65536)
+            val = float(self.name)
+            if val > 32767.0 or val < -32767.0:
+                raise SyntaxError("Fixed16 out of range, must be tween -32767.0 and 32767.0", lineno=kwargs['lineno'])
+
+            self.value = int(val * 65536)
         else:
             self.value = int(self.name)
 
@@ -464,6 +469,7 @@ class irPixelArray(irObject):
                 'reverse': 0,
                 'mirror': -1,
                 'offset': 0,
+                'palette': 0,
             }
 
         except IndexError:
@@ -473,7 +479,7 @@ class irPixelArray(irObject):
             if k not in self.fields:
                 raise SyntaxError("Invalid argument for PixelArray: %s" % (k), lineno=self.lineno)
 
-            if k == 'mirror':
+            if k == 'mirror' or k == 'palette':
                 self.fields[k] = v.name
             else:
                 self.fields[k] = int(v.name)
@@ -508,6 +514,7 @@ PIX_ATTR_TYPES = {
     'hue': 'gfx16',
     'sat': 'gfx16',
     'val': 'gfx16',
+    'pval': 'gfx16',
     'hs_fade': 'i32',
     'v_fade': 'i32',
     'count': 'i32',
@@ -524,7 +531,7 @@ class irPixelAttr(irObjectAttr):
     def __init__(self, obj, attr, **kwargs):
         lineno = kwargs['lineno']
 
-        if attr in ['hue', 'val', 'sat']:
+        if attr in ['hue', 'val', 'sat', 'pval']:
             attr = irArray(attr, irVar_gfx16(attr, lineno=lineno), dimensions=[65535, 65535], lineno=lineno)
 
         elif attr in ['hs_fade', 'v_fade']:
@@ -621,7 +628,12 @@ class irFunc(IR):
             # interleave source code
             if node.lineno > current_line:
                 current_line = node.lineno
-                s += "%d\t%s\n" % (current_line, source_code[current_line - 1].strip())
+                try:
+                    s += "%d\t%s\n" % (current_line, source_code[current_line - 1].strip())
+
+                except IndexError:
+                    print "Source interleave from imported files not yet supported"
+                    pass
 
             if isinstance(node, irLabel):
                 s += '%s\n' % (node)
@@ -1029,6 +1041,12 @@ class irLibCall(IR):
             call_ins = insDBCall(self.target, db_item, self.result.generate(), params)
 
         else:
+            # if calling a thread function, remap the first parameter to a Python string,
+            # and not our IR string literal type.  This way the assembler will see a parameter
+            # it can't assemble, and will try to map to the address of a named function instead.
+            if self.target in THREAD_FUNCS:
+                params[0] = self.params[0].name
+
             call_ins = insLibCall(self.target, self.result.generate(), params)
 
         return call_ins
@@ -1333,6 +1351,7 @@ class irPixelStore(IR):
             'hue': insPixelStoreHue,
             'sat': insPixelStoreSat,
             'val': insPixelStoreVal,
+            'pval': insPixelStorePVal,
             'hs_fade': insPixelStoreHSFade,
             'v_fade': insPixelStoreVFade,
         }
@@ -1368,6 +1387,7 @@ class irPixelLoad(IR):
             'hue': insPixelLoadHue,
             'sat': insPixelLoadSat,
             'val': insPixelLoadVal,
+            'pval': insPixelLoadPVal,
             'hs_fade': insPixelLoadHSFade,
             'v_fade': insPixelLoadVFade,
             'is_hs_fading': insPixelIsHSFade,
@@ -1428,6 +1448,26 @@ class irIndexStore(IR):
     def generate(self):
         return insIndirectStore(self.value.generate(), self.address.generate())
 
+class irBlock(IR):
+    def __init__(self, **kwargs):
+        super(irBlock, self).__init__(**kwargs)
+        self.code = []
+        self.data = []
+        self.blocks = []
+
+    # def __str__(self):
+        # s = '----------------'
+        # return s    
+
+    def append_code(self, code):
+        self.code.append(code)
+
+    def append_data(self, data):
+        self.data.append(data)
+
+    def append_block(self, block):
+        self.blocks.append(block)
+
 
 CONST65535 = irConst(65535, lineno=0)
 
@@ -1452,7 +1492,12 @@ class Builder(object):
         self.globals = {}
         self.objects = {}
         self.pixel_arrays = {}
+        self.palettes = {}
         self.labels = {}
+
+        # self.blocks = None
+        self.current_block = None
+        self.block_stack = []
 
         self.data_table = []
         self.data_count = 0
@@ -1522,6 +1567,17 @@ class Builder(object):
         # create main pixels object
         self.pixelarray_object('pixels', args=[0, 65535], lineno=0)
 
+        # create Palette type
+        fields = {
+                    'i': {'type': 'f16', 'dimensions': []},
+                    'h': {'type': 'f16', 'dimensions': []},
+                    's': {'type': 'f16', 'dimensions': []},
+                    'v': {'type': 'f16', 'dimensions': []},
+                 }
+
+        self.create_record('Palette', fields, lineno=0)
+        
+
     def __str__(self):
         s = "FX IR:\n"
 
@@ -1546,6 +1602,23 @@ class Builder(object):
             s += '%s\n' % (func)
 
         return s
+
+    def open_block(self, lineno=None):
+        return
+        self.current_block = irBlock(lineno=lineno)
+        self.block_stack.append(self.current_block)
+
+        # print "open", self.current_block
+
+    def close_block(self):
+        return
+        # print "close", self.current_block
+        self.block_stack.pop(-1)
+        try:
+            self.current_block = self.block_stack[-1]
+
+        except IndexError:
+            self.current_block = None
 
     def finish_module(self):
         # clean up stuff after first pass is done
@@ -1688,9 +1761,6 @@ class Builder(object):
 
         return ir
 
-    def add_tuple(self, items, lineno=None):
-        print items
-
     def get_var(self, name, lineno=None):
         name = str(name)
 
@@ -1784,6 +1854,14 @@ class Builder(object):
         self.current_func = func.name
         self.next_temp = 0 
 
+        if len(self.block_stack) > 0:
+            self.close_block()
+
+        self.open_block(lineno=kwargs['lineno'])
+        # self.blocks = irBlock(lineno=0)
+        # self.current_block = self.blocks
+        # self.block_stack = [self.current_block]
+
         return func
 
     def append_node(self, node):
@@ -1796,6 +1874,8 @@ class Builder(object):
         ir = irReturn(value, lineno=lineno)
 
         self.append_node(ir)
+
+        self.close_block()
 
         return ir
 
@@ -2227,6 +2307,14 @@ class Builder(object):
 
         try:
             args = self.funcs[func_name].params
+
+            for i in xrange(len(params)):
+                param = params[i]
+                if isinstance(param, irAddress):
+                    # load to temp var
+                    temp = self.load_indirect(param, lineno=lineno)
+                    params[i] = temp # replace parameter
+
             ir = irCall(func_name, params, args, result, lineno=lineno)
 
         except KeyError:
@@ -2299,6 +2387,8 @@ class Builder(object):
         self.append_node(label)
         
     def begin_while(self, lineno=None):
+        self.open_block(lineno=lineno)
+
         top_label = self.label('while.top', lineno=lineno)
         end_label = self.label('while.end', lineno=lineno)
         self.position_label(top_label)
@@ -2319,7 +2409,11 @@ class Builder(object):
         self.loop_top.pop(-1)
         self.loop_end.pop(-1)
 
+        self.close_block()
+
     def begin_for(self, iterator, lineno=None):
+        self.open_block(lineno=lineno)
+
         begin_label = self.label('for.begin', lineno=lineno) # we don't actually need this label, but it is helpful for reading the IR
         self.position_label(begin_label)
         top_label = self.label('for.top', lineno=lineno)
@@ -2348,6 +2442,8 @@ class Builder(object):
 
         self.loop_top.pop(-1)
         self.loop_end.pop(-1)
+
+        self.close_block()
 
     def jump(self, target, lineno=None):
         ir = irJump(target, lineno=lineno)
@@ -2436,16 +2532,33 @@ class Builder(object):
 
         self.add_global(name, 'PixelArray', lineno=lineno)
 
+    def palette_object(self, name, args=[], kw={}, lineno=None):    
+        # check types
+        for arg in args:
+            for val in arg:
+                if not isinstance(val, float) and not isinstance(val, int):
+                    raise SyntaxError("Invalid type for palette `%s`: %s" % (name, val), lineno=lineno)
+
+        keywords = {'init_val': args}
+        palette_array = self.add_global(name, 'Palette', dimensions=[len(args)], keywords=keywords, lineno=lineno)
+
+        self.palettes[name] = None
+
+        return palette_array
+
+
     def generic_object(self, name, data_type, args=[], kw={}, lineno=None):
-        if data_type == 'PixelArray':
-            self.pixelarray_object(name, args, kw, lineno=lineno)
-
-            return
-
         if name in self.objects:
             raise SyntaxError("Object '%s' already defined" % (name), lineno=lineno)
 
-        self.objects[name] = irObject(name, data_type, args, kw, lineno=lineno)
+        if data_type == 'PixelArray':
+            self.pixelarray_object(name, args, kw, lineno=lineno)
+
+        elif data_type == 'Palette':
+            self.palette_object(name, args, kw, lineno=lineno)
+
+        else:
+            self.objects[name] = irObject(name, data_type, args, kw, lineno=lineno)
 
     def _fold_constants(self, op, left, right, lineno):
         assert left.get_base_type() == right.get_base_type()
@@ -2774,7 +2887,7 @@ class Builder(object):
         return liveness
 
     def debug_print(self, s):
-        # print s
+        print s
         pass
 
     def allocate(self):
@@ -2856,9 +2969,31 @@ class Builder(object):
                 continue
 
             i.addr = addr
+
+            # check for palette
+            if i.name in self.palettes:
+                self.palettes[i.name] = addr
+
             addr += i.length
 
             self.data_table.append(i)
+
+        # assign palettes to pixel arrays
+        for name, pix_array in self.pixel_arrays.items():
+            palette = pix_array.fields['palette']
+
+            # check if no palette assigned
+            if palette == 0:
+                continue
+
+            if palette not in self.palettes:
+                raise SyntaxError("Palette `%s` not defined" % (palette), lineno=pix_array.lineno)
+
+            # look up palette addr and assign to palette field
+            pix_array.fields['palette'] = self.palettes[palette]
+            pix_array_records[name].fields['palette'].default_value = self.palettes[palette]
+
+
 
 
         if self.optimizations['optimize_register_usage']:
@@ -3017,9 +3152,9 @@ class Builder(object):
 
         return self.data_table
 
-    def print_data_table(self, data):
+    def print_data_table(self):
         print "DATA: "
-        for i in sorted(data, key=lambda d: d.addr):
+        for i in sorted(self.data_table, key=lambda d: d.addr):
             default_value = ''
 
             if i.length == 1:
@@ -3031,9 +3166,9 @@ class Builder(object):
 
             else:
                 default_value = '['
-                for n in xrange(i.length):
+                for n in xrange(i.count):
                     try:
-                        val = i.default_value[n]    
+                        val = i.default_value[n]
                     except TypeError: # no default value given, so this will be all 0s
                         val = 0
                     
@@ -3056,13 +3191,13 @@ class Builder(object):
             for s in self.strings:
                 print '\t%3d: [%3d] %s' % (s.addr, s.strlen, s.name)
 
-    def print_instructions(self, instructions):
+    def print_instructions(self):
         print "INSTRUCTIONS: "
         i = 0
-        for func in instructions:
+        for func in self.code:
             print '\t%s:' % (func)
 
-            for ins in instructions[func]:
+            for ins in self.code[func]:
                 s = '\t\t%3d: %s' % (i, str(ins))
                 print s
                 i += 1
@@ -3309,6 +3444,7 @@ class Builder(object):
         data_table.extend(self.strings)
 
         for var in data_table:
+            print var, addr
             if var.addr < addr:
                 continue
 
@@ -3326,21 +3462,42 @@ class Builder(object):
 
                 addr += var.size
 
+            elif var.length == 1:
+                try:
+                    default_value = var.default_value
+                    stream += struct.pack('<l', default_value)
+                    addr += var.length
+
+                except struct.error:
+                    print "*********************************"
+                    print "packing error: var: %s type: %s default: %s type: %s" % (var, var.type, default_value, type(default_value))
+
+                    raise
+
             else:
-                for i in xrange(var.length):
-                    try:
-                        default_value = var.default_value[i]
-                    except TypeError:
-                        default_value = var.default_value
+                try:
+                    for i in xrange(var.length):
+                        try:
+                            default_value = var.default_value[i]
 
-                    try:
-                        stream += struct.pack('<l', default_value)
+                        except TypeError:
+                            default_value = var.default_value
 
-                    except struct.error:
-                        print "*********************************"
-                        print "packing error: var: %s type: %s default: %s type: %s" % (var, type(var), default_value, type(default_value))
+                        try:
+                            stream += struct.pack('<l', default_value)
 
-                        raise
+                        except struct.error:
+                            for val in default_value:
+                                if isinstance(val, float):
+                                    stream += struct.pack('<l', int(val * 65536))
+                                else:
+                                    stream += struct.pack('<l', val)
+
+                except struct.error:
+                    print "*********************************"
+                    print "packing error: var: %s type: %s default: %s type: %s index: %d" % (var, var.type, default_value, type(default_value), i)
+
+                    raise
 
                 addr += var.length
 
@@ -3349,7 +3506,7 @@ class Builder(object):
             assert addr * 4 == data_len
 
         except AssertionError:
-            print addr * 4, data_len
+            print "Bad data length. Last addr: %d data len: %d" % (addr * 4, data_len)
             raise
 
         # create hash of stream

@@ -51,6 +51,9 @@ typedef struct{
 } adc_ch_t;
 
 static const adc_ch_t board_channels[] = {
+#ifdef BOARD_CHROMATRONX
+
+#else
 	{&hadc1, ADC_CHANNEL_8},		 // IO_PIN_GPIOA0
 	{&hadc1, ADC_CHANNEL_4},		 // IO_PIN_GPIOA1
 	{&hadc1, ADC_CHANNEL_8},		 // IO_PIN_GPIOA2
@@ -60,14 +63,8 @@ static const adc_ch_t board_channels[] = {
 
 	{&hadc1, ADC_CHANNEL_5},	 		// vmon
 	{&hadc3, ADC_CHANNEL_VREFINT},	 // vref (internal)
-};
-
-#ifdef BOARD_CHROMATRONX
-static const adc_ch_t channels_ctx[] = {
-	{MEAS1_Pin, 	MEAS1_GPIO_Port, 	&hadc1, ADC_CHANNEL_8},
-	{0, 		0, 				     	&hadc3, ADC_CHANNEL_19},
-};
 #endif
+};
 
 static const adc_ch_t *adc_channels;
 static uint8_t adc_channel_count;
@@ -101,21 +98,19 @@ PT_THREAD( hal_adc_thread( pt_t *pt, void *state ) );
 
 void adc_v_init( void ){
 
+	#if IO_PIN_ANALOG_COUNT == 0
+	return;
+	#endif
+
+
 	__HAL_RCC_ADC12_CLK_ENABLE();
 	__HAL_RCC_ADC3_CLK_ENABLE();
 
-	#ifdef BOARD_CHROMATRON
-
-	adc_channels = channels_ctx;
-	adc_channel_count = cnt_of_array(channels_ctx);
 	
-	#else
-
 	adc_channels = board_channels;
 	adc_channel_count = cnt_of_array(board_channels);
-
-	#endif
-
+	
+	
   	// init VMON
     GPIO_InitTypeDef GPIO_InitStruct;
     GPIO_InitStruct.Alternate 	= 0;
@@ -250,6 +245,10 @@ PT_END( pt );
 
 static int16_t _adc_i16_internal_read( uint8_t channel ){
 
+	#if IO_PIN_ANALOG_COUNT == 0
+	return 0;
+	#endif
+
 	ASSERT( channel < adc_channel_count );
 
 	GPIO_InitTypeDef gpio_init;
@@ -336,6 +335,10 @@ uint16_t adc_u16_read_supply_voltage( void ){
 }
 
 uint16_t adc_u16_read_vcc( void ){
+
+	#if IO_PIN_ANALOG_COUNT == 0
+	return 0;
+	#endif
 
 	uint16_t vref_int = adc_u16_read_raw( ADC_CHANNEL_REF );
 	// this is nominally 1.2V

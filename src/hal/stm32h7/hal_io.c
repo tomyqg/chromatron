@@ -36,6 +36,14 @@ typedef struct{
 } hal_io_ch_t;
 
 static const hal_io_ch_t board_io[IO_PIN_COUNT] = {
+#ifdef BOARD_CHROMATRONX
+    { I2C1_SDA_GPIO_Port, I2C1_SDA_Pin }, // IO_PIN_GPIOSDA
+    { I2C1_SCL_GPIO_Port, I2C1_SCL_Pin }, // IO_PIN_GPIOSCL
+
+    { SPI4_SCK_GPIO_Port, SPI4_SCK_Pin }, // IO_PIN_GPIOSCK
+    { SPI4_MOSI_GPIO_Port, SPI4_MOSI_Pin }, // IO_PIN_GPIOMOSI
+    { SPI4_MISO_GPIO_Port, SPI4_MISO_Pin }, // IO_PIN_GPIOMISO
+#else
     { GPIOC, GPIO_PIN_5 }, // IO_PIN_GPIOA0
     { GPIOC, GPIO_PIN_4 }, // IO_PIN_GPIOA1
     { GPIOA, GPIO_PIN_6 }, // IO_PIN_GPIOA2
@@ -58,7 +66,10 @@ static const hal_io_ch_t board_io[IO_PIN_COUNT] = {
     { GPIOE, GPIO_PIN_11 }, // IO_PIN_GPIO11
     { GPIOE, GPIO_PIN_12 }, // IO_PIN_GPIO12
     { GPIOE, GPIO_PIN_15 }, // IO_PIN_GPIO13
+#endif
 };
+
+
 
 static GPIO_InitTypeDef gpio_config[IO_PIN_COUNT];
 

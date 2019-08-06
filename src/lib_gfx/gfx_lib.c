@@ -50,6 +50,7 @@ static uint16_t pix0_16bit_blue;
 static uint16_t hue[MAX_PIXELS];
 static uint16_t sat[MAX_PIXELS];
 static uint16_t val[MAX_PIXELS];
+static uint16_t pval[MAX_PIXELS];
 
 static uint16_t target_hue[MAX_PIXELS];
 static uint16_t target_sat[MAX_PIXELS];
@@ -89,10 +90,12 @@ static uint32_t scaled_virtual_array_length;
 static uint16_t gfx_frame_rate = 100;
 
 static uint8_t dimmer_curve = GFX_DIMMER_CURVE_DEFAULT;
+static uint8_t sat_curve = GFX_SAT_CURVE_DEFAULT;
 
 
 #define DIMMER_LOOKUP_SIZE 256
 static uint16_t dimmer_lookup[DIMMER_LOOKUP_SIZE];
+static uint16_t sat_lookup[DIMMER_LOOKUP_SIZE];
 
 
 // smootherstep is an 8 bit lookup table for the function:
@@ -118,6 +121,7 @@ KV_SECTION_META kv_meta_t gfx_lib_info_kv[] = {
     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &hs_fade,                     0,   "gfx_hsfade" },
     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &v_fade,                      0,   "gfx_vfade" },
     { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &dimmer_curve,                0,   "gfx_dimmer_curve" },
+    { SAPPHIRE_TYPE_UINT8,      0, KV_FLAGS_PERSIST, &sat_curve,                   0,   "gfx_sat_curve" },
     
     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &virtual_array_start,         0,   "gfx_varray_start" },
     { SAPPHIRE_TYPE_UINT16,     0, KV_FLAGS_PERSIST, &virtual_array_length,        0,   "gfx_varray_length" },
@@ -137,6 +141,18 @@ static void compute_dimmer_lookup( void ){
     }
 }
 
+static void compute_sat_lookup( void ){
+
+    float curve_exp = (float)sat_curve / 64.0;
+
+    for( uint32_t i = 0; i < DIMMER_LOOKUP_SIZE; i++ ){
+
+        float input = ( (float)( i << 8 ) ) / 65535.0;
+
+        sat_lookup[i] = (uint16_t)( pow( input, curve_exp ) * 65535.0 );
+    }
+}
+
 static void setup_master_array( void ){
 
     // check if pixel arrays are configured
@@ -147,6 +163,7 @@ static void setup_master_array( void ){
 
     pix_arrays[0].reverse = FALSE;
     pix_arrays[0].index = 0;
+    pix_arrays[0].mirror = -1;
     pix_arrays[0].count = pix_count;
     pix_arrays[0].size_x = pix_size_x;
     pix_arrays[0].size_y = pix_size_y;    
@@ -254,6 +271,16 @@ static void param_error_check( void ){
 
         gfx_frame_rate = 10;
     }
+
+    if( dimmer_curve < 8 ){
+
+        dimmer_curve = GFX_DIMMER_CURVE_DEFAULT;
+    }
+
+    if( sat_curve < 8 ){
+
+        sat_curve = GFX_SAT_CURVE_DEFAULT;
+    }
 }
 
 void gfx_v_set_vm_frame_rate( uint16_t frame_rate ){
@@ -277,8 +304,10 @@ void gfx_v_set_params( gfx_params_t *params ){
     }
 
     uint8_t old_dimmer_curve = dimmer_curve;
+    uint8_t old_sat_curve = sat_curve;
 
     dimmer_curve            = params->dimmer_curve;
+    sat_curve               = params->sat_curve;
     pix_count               = params->pix_count;
     pix_size_x              = params->pix_size_x;
     pix_size_y              = params->pix_size_y;
@@ -299,6 +328,12 @@ void gfx_v_set_params( gfx_params_t *params ){
     if( old_dimmer_curve != dimmer_curve ){
         
         compute_dimmer_lookup();
+    }
+
+    // only run if sat curve is changing
+    if( old_sat_curve != sat_curve ){
+        
+        compute_sat_lookup();
     }
 
     update_master_fader();
@@ -325,6 +360,7 @@ void gfx_v_get_params( gfx_params_t *params ){
     params->sub_dimmer              = pix_sub_dimmer;
     params->frame_rate              = gfx_frame_rate;
     params->dimmer_curve            = dimmer_curve;
+    params->sat_curve               = sat_curve;
     params->virtual_array_start     = virtual_array_start;
     params->virtual_array_length    = virtual_array_length;
 }
@@ -482,7 +518,7 @@ uint16_t gfx_u16_get_vfade( void ){
 
 
 
-void _gfx_v_set_hue_1d( uint16_t h, uint16_t index ){
+static inline void _gfx_v_set_hue_1d( uint16_t h, uint16_t index ){
 
     // bounds check
     // optimization note:
@@ -499,7 +535,7 @@ void _gfx_v_set_hue_1d( uint16_t h, uint16_t index ){
     hue_step[index] = 0;
 }
 
-void _gfx_v_set_sat_1d( uint16_t s, uint16_t index ){
+static inline void _gfx_v_set_sat_1d( uint16_t s, uint16_t index ){
 
     // bounds check
     if( index >= MAX_PIXELS ){
@@ -513,7 +549,7 @@ void _gfx_v_set_sat_1d( uint16_t s, uint16_t index ){
     sat_step[index] = 0;
 }
 
-void _gfx_v_set_val_1d( uint16_t v, uint16_t index ){
+static inline void _gfx_v_set_val_1d( uint16_t v, uint16_t index ){
 
     // bounds check
     if( index >= MAX_PIXELS ){
@@ -527,7 +563,7 @@ void _gfx_v_set_val_1d( uint16_t v, uint16_t index ){
     val_step[index] = 0;
 }
 
-void _gfx_v_set_hs_fade_1d( uint16_t a, uint16_t index ){
+static inline void _gfx_v_set_hs_fade_1d( uint16_t a, uint16_t index ){
 
     // bounds check
     if( index >= MAX_PIXELS ){
@@ -542,7 +578,7 @@ void _gfx_v_set_hs_fade_1d( uint16_t a, uint16_t index ){
     sat_step[index] = 0;
 }
 
-void _gfx_v_set_v_fade_1d( uint16_t a, uint16_t index ){
+static inline void _gfx_v_set_v_fade_1d( uint16_t a, uint16_t index ){
 
     // bounds check
     if( index >= MAX_PIXELS ){
@@ -1193,6 +1229,53 @@ uint16_t gfx_u16_get_val( uint16_t x, uint16_t y, uint8_t obj ){
     return target_val[index];
 }
 
+
+void gfx_v_set_pval( uint16_t v, uint16_t x, uint16_t y, uint8_t obj, gfx_palette_t *palette ){
+
+    uint16_t index = calc_index( obj, x, y );
+    
+    if( index >= MAX_PIXELS ){
+        return;
+    }
+
+    pval[index] = v;
+
+    // skip to first entry to interpolate
+    while( palette->pval < v ){
+
+        palette++;
+    }
+
+    gfx_palette_t *palette2 = palette + 1;
+
+    if( palette->hue >= 0 ){
+
+        uint16_t hue = util_u16_linear_interp( v, palette->pval, palette->hue, palette2->pval, palette2->hue );
+        _gfx_v_set_hue_1d( hue, index );
+    }
+
+    if( palette->sat >= 0 ){
+
+        uint16_t sat = util_u16_linear_interp( v, palette->pval, palette->sat, palette2->pval, palette2->sat );
+        _gfx_v_set_hue_1d( sat, index );
+    }
+
+    if( palette->val >= 0 ){
+
+        uint16_t val = util_u16_linear_interp( v, palette->pval, palette->val, palette2->pval, palette2->val );
+        _gfx_v_set_hue_1d( val, index );
+    }
+}
+
+uint16_t gfx_u16_get_pval( uint16_t x, uint16_t y, uint8_t obj ){
+
+    uint16_t index = calc_index( obj, x, y );
+    
+    index %= MAX_PIXELS;
+
+    return pval[index];
+}
+
 void gfx_v_set_hs_fade( uint16_t a, uint16_t x, uint16_t y, uint8_t obj ){
 
     uint16_t index = calc_index( obj, x, y );
@@ -1355,6 +1438,68 @@ void gfx_v_init_pixel_arrays( gfx_pixel_array_t *array_ptr, uint8_t count ){
 
     // first array is always the global array, we override with our data
     setup_master_array();  
+
+    for( uint8_t p = 1; p < pix_array_count; p++ ){
+
+        // check if arrays have a 2D grid specified.
+        // if not, apply the 1D count to the size_x.
+
+        if( pix_arrays[p].size_y == 0 ){
+
+            pix_arrays[p].size_x = pix_arrays[p].count;
+            pix_arrays[p].size_y = 1;
+        }
+    }
+}
+
+void gfx_v_delete_pixel_arrays( void ){
+
+    // process mirrors
+    for( uint8_t p = 1; p < pix_array_count; p++ ){
+
+        // check if mirror is set
+        if( pix_arrays[p].mirror < 0 ){
+
+            continue;
+        }
+
+        uint8_t mirror = pix_arrays[p].mirror;
+
+
+        int32_t offset = pix_arrays[p].offset;
+
+        // adjust offset if negative
+        if( offset < 0 ){
+
+            offset = pix_arrays[mirror].size_x + offset;
+        }
+
+        // array "p" is mirroring the array specified by mirror
+
+        for( uint16_t x = 0; x < pix_arrays[p].size_x; x++ ){
+            for( uint16_t y = 0; y < pix_arrays[p].size_y; y++ ){
+                
+                uint16_t index_src = calc_index( mirror, x + offset, y );
+                uint16_t index_dst = calc_index( p, x, y );
+
+                if( ( index_src >= pix_count ) || ( index_dst >= pix_count ) ){
+
+                    continue;
+                }
+
+                _gfx_v_set_hue_1d( target_hue[index_src], index_dst );
+                _gfx_v_set_sat_1d( target_sat[index_src], index_dst );
+                _gfx_v_set_val_1d( target_val[index_src], index_dst );
+
+                _gfx_v_set_hs_fade_1d( hs_fade[index_src], index_dst );
+                _gfx_v_set_v_fade_1d( v_fade[index_src], index_dst );
+            }
+        }
+    }
+
+    // clear arrays
+    pix_arrays = 0;
+    pix_array_count = 0;
 }
 
 static uint16_t linterp_table_lookup( uint16_t x, uint16_t *table ){
@@ -1387,6 +1532,11 @@ uint16_t gfx_u16_get_dimmed_val( uint16_t _val ){
     uint16_t x = ( (uint32_t)_val * current_dimmer ) / 65536;
 
     return linterp_table_lookup( x, dimmer_lookup );
+}
+
+uint16_t gfx_u16_get_curved_sat( uint16_t _sat ){
+
+    return linterp_table_lookup( _sat, sat_lookup );
 }
 
 void gfx_v_process_faders( void ){
@@ -1602,6 +1752,7 @@ void gfxlib_v_init( void ){
     param_error_check();
 
     compute_dimmer_lookup();
+    compute_sat_lookup();
 
     // initialize pixel arrays to defaults
     gfx_v_reset();
@@ -1619,6 +1770,7 @@ void gfx_v_sync_array( void ){
     uint16_t r, g, b, w;
     uint8_t dither;
     uint16_t dimmed_val;
+    uint16_t curved_sat;
 
     // PWM modes will use pixel 0 and need 16 bits.
     // for simplicity's sake, and to avoid a compare-branch in the
@@ -1626,6 +1778,7 @@ void gfx_v_sync_array( void ){
     // here, and then go on with the 8 bit arrays.
 
     dimmed_val = gfx_u16_get_dimmed_val( val[0] );
+    curved_sat = gfx_u16_get_curved_sat( sat[0] );
 
     gfx_v_hsv_to_rgb(
         hue[0],
@@ -1642,10 +1795,11 @@ void gfx_v_sync_array( void ){
 
             // process master dimmer
             dimmed_val = gfx_u16_get_dimmed_val( val[i] );
+            curved_sat = gfx_u16_get_curved_sat( sat[i] );
 
             gfx_v_hsv_to_rgbw(
                 hue[i],
-                sat[i],
+                curved_sat,
                 dimmed_val,
                 &r,
                 &g,
@@ -1670,10 +1824,11 @@ void gfx_v_sync_array( void ){
 
             // process master dimmer
             dimmed_val = gfx_u16_get_dimmed_val( val[i] );
+            curved_sat = gfx_u16_get_curved_sat( sat[i] );
 
             gfx_v_hsv_to_rgb(
                 hue[i],
-                sat[i],
+                curved_sat,
                 dimmed_val,
                 &r,
                 &g,

@@ -92,7 +92,7 @@ static volatile bool is_rx_ready;
 static uint32_t last_status_ts;
 
 static wifi_data_header_t intf_data_header;
-static uint8_t intf_comm_buf[WIFI_BUF_LEN];
+static uint8_t  __attribute__ ((aligned (4))) intf_comm_buf[WIFI_BUF_LEN];
 static uint8_t intf_comm_state;
 
 static wifi_msg_udp_header_t udp_header;
@@ -317,7 +317,7 @@ static void process_data( uint8_t data_id, uint8_t *data, uint16_t len ){
 
         uint32_t *vm_id = (uint32_t *)data;
 
-        for( uint32_t i = 0; i < 32; i++ ){
+        for( uint32_t i = 0; i < 31; i++ ){
 
             if( ( *vm_id & ( 1 << i ) ) != 0 ){
 
@@ -400,6 +400,16 @@ static void process_data( uint8_t data_id, uint8_t *data, uint16_t len ){
 
         opt_v_set_low_power( msg->low_power );
         opt_v_set_led_quiet( msg->led_quiet );
+        opt_v_set_midi_channel( msg->midi_channel );
+    }
+    else if( data_id == WIFI_DATA_ID_SHUTDOWN ){
+        
+        for( uint32_t i = 0; i < 32; i++ ){
+
+            vm_v_reset( i );
+        }
+
+        wifi_v_shutdown();
     }
 }
 
@@ -802,6 +812,11 @@ void intf_v_init( void ){
     _intf_v_flush();
 
     list_v_init( &tx_q );
+
+    if( ( (uint32_t)intf_comm_buf & 0x03 ) != 0 ){
+
+        intf_v_printf("intf_comm_buf misalign");
+    }
 }
 
 

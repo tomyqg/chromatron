@@ -23,8 +23,13 @@
 
 #include "hal_cpu.h"
 #include "cpu.h"
+#include "hal_timers.h"
 
 #include "system.h"
+
+#ifdef BOARD_CHROMATRONX
+#pragma message "BOARD_CHROMATRONX"
+#endif
 
 
 static void cpu_normal_clock_config( void ){
@@ -39,7 +44,14 @@ static void cpu_normal_clock_config( void ){
 
     /**Configure the main internal regulator output voltage 
     */
-    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+    /*
+    Voltage scaling max frequencies from data sheet:
+    1 - 400 MHz
+    2 - 300 MHz
+    3 - 200 MHz (startup default)
+    */
 
     while ((PWR->D3CR & (PWR_D3CR_VOSRDY)) != PWR_D3CR_VOSRDY) 
     {
@@ -48,15 +60,19 @@ static void cpu_normal_clock_config( void ){
     /**Initializes the CPU, AHB and APB busses clocks 
     */
     // PLLs sourced to HSE (external xtal) - requires 16 MHz xtal
+    // note that chromatron X has an 8 MHz crystal (from the nucleo boards)
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSE;
-    // RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+    RCC_OscInitStruct.HSIState = RCC_HSI_OFF;
     RCC_OscInitStruct.HSEState = RCC_HSE_ON;
     RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
     RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
     // set PLL1 to 400 MHz
-    // RCC_OscInitStruct.PLL.PLLM = 1;
+    #ifdef BOARD_CHROMATRONX
+    RCC_OscInitStruct.PLL.PLLM = 1;
+    #else
     RCC_OscInitStruct.PLL.PLLM = 2;
+    #endif
     RCC_OscInitStruct.PLL.PLLN = 100;
     RCC_OscInitStruct.PLL.PLLP = 2;
     RCC_OscInitStruct.PLL.PLLQ = 4;
@@ -101,7 +117,11 @@ static void cpu_normal_clock_config( void ){
                               RCC_PERIPHCLK_USB;
 
     // set PLL 2 to 100 MHz
+    #ifdef BOARD_CHROMATRONX
     PeriphClkInitStruct.PLL2.PLL2M = 1;
+    #else
+    PeriphClkInitStruct.PLL2.PLL2M = 2;
+    #endif
     PeriphClkInitStruct.PLL2.PLL2N = 25;
     PeriphClkInitStruct.PLL2.PLL2P = 2;
     PeriphClkInitStruct.PLL2.PLL2Q = 2;
@@ -111,7 +131,11 @@ static void cpu_normal_clock_config( void ){
     PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
 
     // set PLL 3 to 64 MHz
+    #ifdef BOARD_CHROMATRONX
     PeriphClkInitStruct.PLL3.PLL3M = 8;
+    #else
+    PeriphClkInitStruct.PLL3.PLL3M = 16;
+    #endif
     PeriphClkInitStruct.PLL3.PLL3N = 256;
     PeriphClkInitStruct.PLL3.PLL3P = 4;
     PeriphClkInitStruct.PLL3.PLL3Q = 4;
@@ -172,15 +196,16 @@ static void cpu_boot_clock_config( void ){
     }
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-    // PLLs sourced to HSE (external xtal) - requires 8 MHz xtal
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSE;
-    RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+    // PLLs sourced to HSI (64 MHz)
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSI;
+    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.HSEState = RCC_HSE_OFF;
     RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-    // set PLL1 to 76 MHz
-    RCC_OscInitStruct.PLL.PLLM = 1;
-    RCC_OscInitStruct.PLL.PLLN = 19;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+    // set PLL1 to 80 MHz
+    RCC_OscInitStruct.PLL.PLLM = 4;
+    RCC_OscInitStruct.PLL.PLLN = 10;
     RCC_OscInitStruct.PLL.PLLP = 2;
     RCC_OscInitStruct.PLL.PLLQ = 4;
     RCC_OscInitStruct.PLL.PLLR = 2;
@@ -197,7 +222,7 @@ static void cpu_boot_clock_config( void ){
     RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
     RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
     RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
     RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
@@ -222,9 +247,9 @@ static void cpu_boot_clock_config( void ){
                               |RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_I2C1
                               |RCC_PERIPHCLK_SPI6|RCC_PERIPHCLK_QSPI;
 
-    // set PLL 2 to 76 MHz
-    PeriphClkInitStruct.PLL2.PLL2M = 1;
-    PeriphClkInitStruct.PLL2.PLL2N = 19;
+    // set PLL 2 to 32 MHz
+    PeriphClkInitStruct.PLL2.PLL2M = 8;
+    PeriphClkInitStruct.PLL2.PLL2N = 8;
     PeriphClkInitStruct.PLL2.PLL2P = 2;
     PeriphClkInitStruct.PLL2.PLL2Q = 2;
     PeriphClkInitStruct.PLL2.PLL2R = 2;
@@ -232,9 +257,9 @@ static void cpu_boot_clock_config( void ){
     PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
     PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
 
-    // set PLL 3 to 64 MHz
+    // set PLL 3 to 32 MHz
     PeriphClkInitStruct.PLL3.PLL3M = 8;
-    PeriphClkInitStruct.PLL3.PLL3N = 256;
+    PeriphClkInitStruct.PLL3.PLL3N = 8;
     PeriphClkInitStruct.PLL3.PLL3P = 4;
     PeriphClkInitStruct.PLL3.PLL3Q = 4;
     PeriphClkInitStruct.PLL3.PLL3R = 4;
@@ -257,17 +282,6 @@ static void cpu_boot_clock_config( void ){
     {
         Error_Handler();
     }
-
-    /**Configure the Systick interrupt time 
-    */
-    HAL_SYSTICK_Config(SystemCoreClock/1000);
-
-    /**Configure the Systick 
-    */
-    HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
-
-    /* SysTick_IRQn interrupt configuration */
-    HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 
     // update clock frequency info
     SystemCoreClockUpdate();
@@ -354,6 +368,7 @@ void cpu_v_init( void ){
     // update clock
     cpu_normal_clock_config();
 
+
     cpu_init_noncacheable();
 
     // enable gpio clocks
@@ -373,7 +388,29 @@ void cpu_v_init( void ){
     HAL_RCCEx_GetPLL2ClockFreq( &pll2_clk );
     HAL_RCCEx_GetPLL3ClockFreq( &pll3_clk );
 
-    trace_printf( "STM32H7\r\n" );
+    uint16_t revision = HAL_GetREVID();
+
+    switch( revision ){
+        case STM32H7_REV_Z:
+            trace_printf( "STM32H7 rev Z\r\n" );
+            break;
+
+        case STM32H7_REV_Y:
+            trace_printf( "STM32H7 rev Y\r\n" );
+            break;
+
+        case STM32H7_REV_X:
+            trace_printf( "STM32H7 rev X\r\n" );
+            break;
+
+        case STM32H7_REV_V:
+            trace_printf( "STM32H7 rev V\r\n" );
+            break;
+
+        default:
+            trace_printf( "STM32H7 rev UNKNOWN\r\n" );
+            break;
+    }
 
     trace_printf( "CPU Clock: %u\r\n", cpu_u32_get_clock_speed() );
     trace_printf( "HCLK     : %u\r\n", HAL_RCC_GetHCLKFreq() );
@@ -383,14 +420,16 @@ void cpu_v_init( void ){
     trace_printf( "D1Sys    : %u\r\n", HAL_RCCEx_GetD1SysClockFreq() );
 
     trace_printf( "PLL1 P   : %u\r\n", pll1_clk.PLL1_P_Frequency );
-    trace_printf( "PLL1 Q   : %u\r\n", pll1_clk.PLL1_Q_Frequency );
-    trace_printf( "PLL1 R   : %u\r\n", pll1_clk.PLL1_R_Frequency );
+    // trace_printf( "PLL1 Q   : %u\r\n", pll1_clk.PLL1_Q_Frequency );
+    // trace_printf( "PLL1 R   : %u\r\n", pll1_clk.PLL1_R_Frequency );
     trace_printf( "PLL2 P   : %u\r\n", pll2_clk.PLL2_P_Frequency );
-    trace_printf( "PLL2 Q   : %u\r\n", pll2_clk.PLL2_Q_Frequency );
-    trace_printf( "PLL2 R   : %u\r\n", pll2_clk.PLL2_R_Frequency );
+    // trace_printf( "PLL2 Q   : %u\r\n", pll2_clk.PLL2_Q_Frequency );
+    // trace_printf( "PLL2 R   : %u\r\n", pll2_clk.PLL2_R_Frequency );
     trace_printf( "PLL3 P   : %u\r\n", pll3_clk.PLL3_P_Frequency );
-    trace_printf( "PLL3 Q   : %u\r\n", pll3_clk.PLL3_Q_Frequency );
-    trace_printf( "PLL3 R   : %u\r\n", pll3_clk.PLL3_R_Frequency );
+    // trace_printf( "PLL3 Q   : %u\r\n", pll3_clk.PLL3_Q_Frequency );
+    // trace_printf( "PLL3 R   : %u\r\n", pll3_clk.PLL3_R_Frequency );
+
+    hal_timer_v_preinit();
 }
 
 uint8_t cpu_u8_get_reset_source( void ){
@@ -493,8 +532,6 @@ void hal_cpu_v_boot_init( void ){
     /* Set Interrupt Group Priority */
     HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
 
-    /* Use systick as time base source and configure 1ms tick (default clock after Reset is HSI) */
-    HAL_InitTick(TICK_INT_PRIORITY);
 
     // enable SYSCFG controller clock
     __HAL_RCC_SYSCFG_CLK_ENABLE();
@@ -514,11 +551,13 @@ void hal_cpu_v_boot_init( void ){
     HAL_NVIC_SetPriority(DebugMonitor_IRQn, 0, 0);
     /* PendSV_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(PendSV_IRQn, 0, 0);
-    /* SysTick_IRQn interrupt configuration */
-    HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
-
+    
     // update clock
     cpu_boot_clock_config();
+
+    /* Use systick as time base source and configure 1ms tick (default clock after Reset is HSI) */
+    HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+    HAL_InitTick(TICK_INT_PRIORITY);
     
     // enable gpio clocks
     __HAL_RCC_GPIOA_CLK_ENABLE();

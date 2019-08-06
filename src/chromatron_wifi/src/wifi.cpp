@@ -59,12 +59,18 @@ static uint32_t udp_received;
 static uint32_t udp_sent;
 static uint16_t connects;
 
+static bool mdns_connected;
 static bool request_ap_mode;
 static bool request_connect;
 static bool request_disconnect;
 static bool request_ports;
+static bool request_shutdown;
 static bool ap_mode;
 static bool scanning;
+
+static IPAddress soft_AP_IP(192,168,4,1);
+static IPAddress soft_AP_gateway(192,168,4,1);
+static IPAddress soft_AP_subnet(255,255,255,0);
 
 static int32_t elapsed_millis( uint32_t start ){
 
@@ -176,7 +182,7 @@ void wifi_v_init( void ){
     memset( hostname, 0, sizeof(hostname) );
     strlcpy( hostname, "Chromatron_", sizeof(hostname) );
 
-    strncat( hostname, mac_str, sizeof(hostname) );
+    strlcat( hostname, mac_str, sizeof(hostname) );
 
     WiFi.hostname(hostname);
 }
@@ -206,18 +212,48 @@ void wifi_v_process( void ){
             wifi_v_set_status_bits( WIFI_STATUS_CONNECTED );
             wifi_v_send_status();
 
-            if( !MDNS.begin( hostname ) ){
-
-                intf_v_printf("MDNS fail");
-            }
-
-            MDNS.addService( "catbus", "udp", 44632 );
-            MDNS.addServiceTxt("catbus", "udp", "service", "chromatron");
-
             intf_v_printf("Connected!");
         }
 
-        MDNS.update();
+        // if in station mode:
+        // NOTE:
+        // MDNS will CRASH in AP mode!!!
+
+        if( WiFi.getMode() == WIFI_STA ){
+
+            // check if MDNS is up
+            if( mdns_connected ){
+
+                MDNS.update();
+            }
+            else{
+                // enable MDNS
+                if( MDNS.begin( hostname ) ){
+
+                    MDNS.addService( "catbus", "udp", 44632 );
+                    MDNS.addServiceTxt( "catbus", "udp", "service", "chromatron" );
+
+                    int8_t midi_channel = opt_i8_get_midi_channel();
+
+                    if( midi_channel >= 0 ){
+
+                        MDNS.addService( "apple-midi", "udp", 5004 );
+                        char temp[32];
+                        snprintf( temp, sizeof(temp), "%d", midi_channel );
+                        MDNS.addServiceTxt( "apple-midi", "udp", "channel", temp );
+                    }
+
+                    mdns_connected = true;
+
+                    intf_v_printf("MDNS connected");
+                }
+                else{
+
+                    // MDNS fail - probably failed the IGMP join
+                    // intf_v_printf("MDNS fail");
+                }
+            }        
+        }
     }
     else{
 
@@ -283,6 +319,9 @@ void wifi_v_process( void ){
         WiFi.mode( WIFI_AP );
         ap_mode = true;
 
+        // configure IP
+        WiFi.softAPConfig(soft_AP_IP, soft_AP_gateway, soft_AP_subnet);
+
         // NOTE!
         // password must be at least 8 characters.
         // if it is less, the ESP will use a default SSID
@@ -298,6 +337,9 @@ void wifi_v_process( void ){
     }
     else if( request_disconnect ){
 
+        MDNS.close();
+        mdns_connected = false;
+
         WiFi.disconnect();
 
         request_connect = false;
@@ -305,7 +347,16 @@ void wifi_v_process( void ){
 
         wifi_v_clr_status_bits( WIFI_STATUS_AP_MODE );
     }
+    else if( request_shutdown ){
 
+        MDNS.close();
+        mdns_connected = false;
+
+        delay(100);
+
+        request_shutdown = false;
+        request_disconnect = true;
+    }
 
     if( request_ports ){
 
@@ -583,6 +634,11 @@ void wifi_v_set_ap_mode( char *_ssid, char *_pass ){
 
         request_ap_mode = true;
     }
+}
+
+void wifi_v_shutdown( void ){
+
+    request_shutdown = true;
 }
 
 void wifi_v_scan( void ){

@@ -49,6 +49,7 @@ typedef struct  __attribute__((packed)){
     uint16_t virtual_array_start;
     uint16_t virtual_array_length;
     uint32_t sync_group_hash;
+    uint16_t sat_curve;
 } gfx_params_t;
 
 typedef struct  __attribute__((packed)){
@@ -58,6 +59,7 @@ typedef struct  __attribute__((packed)){
 } gfx_pixel_t;
 
 #define GFX_DIMMER_CURVE_DEFAULT    128
+#define GFX_SAT_CURVE_DEFAULT       128
 
 #define ARRAY_OBJ_TYPE      0
 #define PIX_OBJ_TYPE        1
@@ -72,10 +74,21 @@ typedef struct  __attribute__((packed)){
 typedef struct  __attribute__((packed)){
     int32_t count;
     int32_t index;
+    int32_t mirror;
+    int32_t offset;
+    int32_t palette;
     int32_t reverse;
     int32_t size_x;
     int32_t size_y;
 } gfx_pixel_array_t;
+
+// note this needs to pad to 32 bit alignment!
+typedef struct  __attribute__((packed)){
+    int32_t pval;
+    int32_t hue;
+    int32_t sat;
+    int32_t val;
+} gfx_palette_t;
 
 void gfx_v_set_vm_frame_rate( uint16_t frame_rate );
 uint16_t gfx_u16_get_vm_frame_rate( void );
@@ -148,6 +161,9 @@ uint16_t gfx_u16_get_sat( uint16_t x, uint16_t y, uint8_t obj );
 void gfx_v_set_val( uint16_t v, uint16_t x, uint16_t y, uint8_t obj );
 uint16_t gfx_u16_get_val( uint16_t x, uint16_t y, uint8_t obj );
 
+void gfx_v_set_pval( uint16_t v, uint16_t x, uint16_t y, uint8_t obj, gfx_palette_t *palette );
+uint16_t gfx_u16_get_pval( uint16_t x, uint16_t y, uint8_t obj );
+
 void gfx_v_set_hs_fade( uint16_t a, uint16_t x, uint16_t y, uint8_t obj );
 uint16_t gfx_u16_get_hs_fade( uint16_t x, uint16_t y, uint8_t obj );
 
@@ -172,6 +188,7 @@ void gfx_v_sync_array( void );
 
 void gfx_v_reset( void );
 void gfx_v_init_pixel_arrays( gfx_pixel_array_t *array_ptr, uint8_t count );
+void gfx_v_delete_pixel_arrays( void );
 
 void gfx_v_init_noise( void );
 uint16_t gfx_u16_noise( uint16_t x );

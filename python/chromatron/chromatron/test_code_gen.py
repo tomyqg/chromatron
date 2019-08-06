@@ -1784,10 +1784,98 @@ def init():
     
 """
 
+
+test_pixel_mirror_compile = """
+
+# no numeric checks, this test passes if it compiles without error
+
+meow1 = PixelArray(0, 1, mirror='pixels')
+meow2 = PixelArray(1, 2, mirror='meow1')
+meow3 = PixelArray(0, 1, mirror=pixels)
+meow4 = PixelArray(1, 2, mirror=meow1)
+    
+"""
+
+test_global_avoids_optimize_assign_targets = """
+
+a = Fixed16(publish=True)
+b = Fixed16(publish=True)
+c = Fixed16(publish=True)
+
+def init():
+    a += 0.1
+
+    b = a
+
+    c = b
+    
+"""
+
+
+test_indirect_load_func_arg = """
+
+ary = Array(4)
+
+a = Number(publish=True)
+b = Number(publish=True)
+
+def test(_a):
+    return _a + 1
+
+def init():
+    ary[2] = 123
+    a = test(ary[2])
+    b = ary[2]
+    
+"""
+
+
+# this test just needs to compile
+test_bad_data_count = """
+
+i = Number()
+
+def init():
+    while i < 0:
+        for x in pixels.size_x:
+                pass
+
+    for x in pixels.size_x:
+        pass
+    
+    
+"""
+
+
 class CGTestsBase(unittest.TestCase):
     def run_test(self, program, expected={}):
         pass
-    
+
+    def test_bad_data_count(self):
+        self.run_test(test_bad_data_count,
+            expected={
+            })
+
+    def test_indirect_load_func_arg(self):
+        self.run_test(test_indirect_load_func_arg,
+            expected={
+                'a': 124,
+                'b': 123,
+            })
+
+    def test_global_avoids_optimize_assign_targets(self):
+        self.run_test(test_global_avoids_optimize_assign_targets,
+            expected={
+                'a': 0.0999908447265625,
+                'b': 0.0999908447265625,
+                'c': 0.0999908447265625,
+            })
+
+    def test_pixel_mirror_compile(self):
+        self.run_test(test_pixel_mirror_compile,
+            expected={
+            })
+
     def test_temp_variable_redeclare_outside_scope(self):
         self.run_test(test_temp_variable_redeclare_outside_scope,
             expected={

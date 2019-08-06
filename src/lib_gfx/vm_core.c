@@ -186,8 +186,9 @@ static int8_t _vm_i8_run_stream(
         &&opcode_is_v_fading,	    // 69
         &&opcode_is_hs_fading,	    // 70
 
-        &&opcode_trap,	            // 71
-        &&opcode_trap,	            // 72
+        &&opcode_pstore_pval,	    // 71
+        &&opcode_pload_pval,	    // 72
+
         &&opcode_trap,	            // 73
         &&opcode_trap,	            // 74
         &&opcode_trap,	            // 75
@@ -394,11 +395,13 @@ static int8_t _vm_i8_run_stream(
     catbus_hash_t32 hash;
     catbus_hash_t32 db_hash;
     vm_string_t *string;
-    void *ptr;
-    uint16_t ptr_len;
+    int32_t *db_ptr;
+    uint16_t db_ptr_len;
     
     #ifdef VM_ENABLE_GFX
     int32_t value_i32;
+    gfx_palette_t *palette;
+    gfx_pixel_array_t *pix_array;
     #endif
 
     uint8_t *call_stack[VM_MAX_CALL_DEPTH];
@@ -1406,7 +1409,7 @@ opcode_store_indirect:
     decode2 = (decode2_t *)pc;
     pc += sizeof(decode2_t);
 
-    temp = data[decode2->src];
+    temp = data[decode2->dest];
 
     // bounds check
     if( temp >= state->data_count ){
@@ -1461,11 +1464,11 @@ opcode_vmov:
     pc += sizeof(decodev_t);
 
     // deference pointer
-    decodev->dest = data[decodev->dest];
+    dest = data[decodev->dest];
 
     for( uint16_t i = 0; i < decodev->len; i++ ){
 
-        data[decodev->dest + i] = data[decodev->src];
+        data[dest + i] = data[decodev->src];
     }
 #else
     dest = *pc++;
@@ -1493,11 +1496,11 @@ opcode_vadd:
     pc += sizeof(decodev_t);
 
     // deference pointer
-    decodev->dest = data[decodev->dest];
+    dest = data[decodev->dest];
 
     for( uint16_t i = 0; i < decodev->len; i++ ){
 
-        data[decodev->dest + i] += data[decodev->src];
+        data[dest + i] += data[decodev->src];
     }
 #else
     dest = *pc++;
@@ -1525,11 +1528,11 @@ opcode_vsub:
     pc += sizeof(decodev_t);
 
     // deference pointer
-    decodev->dest = data[decodev->dest];
+    dest = data[decodev->dest];
 
     for( uint16_t i = 0; i < decodev->len; i++ ){
 
-        data[decodev->dest + i] -= data[decodev->src];
+        data[dest + i] -= data[decodev->src];
     }
 #else
     dest = *pc++;
@@ -1557,20 +1560,20 @@ opcode_vmul:
     pc += sizeof(decodev_t);
 
     // deference pointer
-    decodev->dest = data[decodev->dest];
+    dest = data[decodev->dest];
 
-    if( type == CATBUS_TYPE_FIXED16 ){
+    if( decodev->type == CATBUS_TYPE_FIXED16 ){
 
         for( uint16_t i = 0; i < decodev->len; i++ ){
 
-            data[decodev->dest + i] = ( (int64_t)data[decodev->dest + i] * data[decodev->src] ) / 65536;
+            data[dest + i] = ( (int64_t)data[dest + i] * data[decodev->src] ) / 65536;
         }
     }
     else{
 
         for( uint16_t i = 0; i < decodev->len; i++ ){
 
-            data[decodev->dest + i] *= data[decodev->src];
+            data[dest + i] *= data[decodev->src];
         }
     }
 #else
@@ -1609,28 +1612,28 @@ opcode_vdiv:
     pc += sizeof(decodev_t);
 
     // deference pointer
-    decodev->dest = data[decodev->dest];
+    dest = data[decodev->dest];
 
     // check for divide by zero
     if( data[decodev->src] == 0 ){
 
         for( uint16_t i = 0; i < decodev->len; i++ ){
 
-            data[decodev->dest + i] = 0;
+            data[dest + i] = 0;
         }
     }
-    else if( type == CATBUS_TYPE_FIXED16 ){
+    else if( decodev->type == CATBUS_TYPE_FIXED16 ){
 
         for( uint16_t i = 0; i < decodev->len; i++ ){
 
-            data[decodev->dest + i] = ( (int64_t)data[decodev->dest + i] * 65536 ) / data[decodev->src];
+            data[dest + i] = ( (int64_t)data[dest + i] * 65536 ) / data[decodev->src];
         }
     }
     else{
 
         for( uint16_t i = 0; i < decodev->len; i++ ){
 
-            data[decodev->dest + i] /= data[decodev->src];
+            data[dest + i] /= data[decodev->src];
         }
     }
 #else
@@ -1677,21 +1680,21 @@ opcode_vmod:
     pc += sizeof(decodev_t);
 
     // deference pointer
-    decodev->dest = data[decodev->dest];
+    dest = data[decodev->dest];
 
     // check for divide by zero
     if( data[decodev->src] == 0 ){
 
         for( uint16_t i = 0; i < decodev->len; i++ ){
 
-            data[decodev->dest + i] = 0;
+            data[dest + i] = 0;
         }
     }
     else{
 
         for( uint16_t i = 0; i < decodev->len; i++ ){
 
-            data[decodev->dest + i] %= data[decodev->src];
+            data[dest + i] %= data[decodev->src];
         }
     }
 #else
@@ -2005,6 +2008,72 @@ opcode_pstore_val:
 #endif    
     DISPATCH;
 
+opcode_pstore_pval:
+#ifdef VM_OPTIMIZED_DECODE
+    decodep2 = (decodep2_t *)pc;
+    pc += sizeof(decodep2_t);
+
+    // load source
+    value_i32 = data[decodep2->src];    
+
+    // clamp to our 16 bit range.
+    // we will essentially saturate at 0 or 65535,
+    // but will not wraparound
+    if( value_i32 > 65535 ){
+
+        value_i32 = 65535;
+    }
+    else if( value_i32 < 0 ){
+
+        value_i32 = 0;
+    }
+
+    // get reference to target pixel array
+    pix_array = (gfx_pixel_array_t *)&data[decodep2->array * sizeof(gfx_pixel_array_t) + PIX_ARRAY_ADDR];
+
+    // get reference to palette
+    palette = (gfx_palette_t *)&data[pix_array->palette];
+
+    gfx_v_set_pval( value_i32, data[decodep2->index_x], data[decodep2->index_y], decodep2->array, palette );
+#else
+    array = *pc++;
+
+    index_x = *pc++;
+    index_x += ( *pc++ ) << 8;
+    
+    index_y = *pc++;
+    index_y += ( *pc++ ) << 8;
+
+    src = *pc++;
+    src += ( *pc++ ) << 8;
+
+    #ifdef VM_ENABLE_GFX
+    // load source
+    value_i32 = data[src];    
+
+    // clamp to our 16 bit range.
+    // we will essentially saturate at 0 or 65535,
+    // but will not wraparound
+    if( value_i32 > 65535 ){
+
+        value_i32 = 65535;
+    }
+    else if( value_i32 < 0 ){
+
+        value_i32 = 0;
+    }
+
+    // get reference to target pixel array
+    pix_array = (gfx_pixel_array_t *)&data[array * sizeof(gfx_pixel_array_t) + PIX_ARRAY_ADDR];
+
+    // get reference to palette
+    palette = (gfx_palette_t *)&data[pix_array->palette];
+
+    gfx_v_set_pval( value_i32, data[index_x], data[index_y], array, palette );
+    #endif
+#endif    
+    DISPATCH;
+
 
 opcode_pstore_vfade:
 #ifdef VM_OPTIMIZED_DECODE
@@ -2196,6 +2265,31 @@ opcode_pload_val:
 #endif    
     DISPATCH;
 
+opcode_pload_pval:
+#ifdef VM_OPTIMIZED_DECODE
+    decodep3 = (decodep3_t *)pc;
+    pc += sizeof(decodep3_t);
+
+    #ifdef VM_ENABLE_GFX
+    data[decodep3->dest] = gfx_u16_get_pval( data[decodep3->index_x], data[decodep3->index_y], decodep3->array );
+    #endif
+#else
+    array = *pc++;
+
+    index_x = *pc++;
+    index_x += ( *pc++ ) << 8;
+    
+    index_y = *pc++;
+    index_y += ( *pc++ ) << 8;
+
+    dest = *pc++;
+    dest += ( *pc++ ) << 8;
+
+    #ifdef VM_ENABLE_GFX
+    data[dest] = gfx_u16_get_pval( data[index_x], data[index_y], array );
+    #endif
+#endif    
+    DISPATCH;
 
 opcode_pload_vfade:
 #ifdef VM_OPTIMIZED_DECODE
@@ -2252,6 +2346,7 @@ opcode_pload_hsfade:
 
 
 opcode_db_store:
+
     hash =  (catbus_hash_t32)(*pc++) << 24;
     hash |= (catbus_hash_t32)(*pc++) << 16;
     hash |= (catbus_hash_t32)(*pc++) << 8;
@@ -2279,20 +2374,20 @@ opcode_db_store:
         // special handling for string types
         string = (vm_string_t *)&data[src];
 
-        ptr = &data[string->addr + 1]; // actual string starts 1 word after header
-        ptr_len = string->length;
+        db_ptr = &data[string->addr + 1]; // actual string starts 1 word after header
+        db_ptr_len = string->length;
     }
     else{
 
-        ptr = &data[src];
-        ptr_len = sizeof(data[src]);
+        db_ptr = &data[src];
+        db_ptr_len = sizeof(data[src]);
     }
 
     #ifdef VM_ENABLE_KV
     #ifdef VM_ENABLE_CATBUS
-    catbus_i8_array_set( hash, type, indexes[0], 1, ptr, ptr_len );
+    catbus_i8_array_set( hash, type, indexes[0], 1, db_ptr, db_ptr_len );
     #else
-    kvdb_i8_array_set( hash, type, indexes[0], ptr, ptr_len );
+    kvdb_i8_array_set( hash, type, indexes[0], db_ptr, db_ptr_len );
     #endif
     #endif
     
@@ -2487,6 +2582,12 @@ int8_t vm_i8_run(
         count--;
     }
 
+    #ifdef VM_ENABLE_GFX
+
+    gfx_v_delete_pixel_arrays();
+
+    #endif
+
     return status;
 }
 
@@ -2550,6 +2651,10 @@ int8_t vm_i8_run_threads(
 
         }
         else if( status == VM_STATUS_HALT ){
+
+            return status;
+        }
+        else{
 
             return status;
         }

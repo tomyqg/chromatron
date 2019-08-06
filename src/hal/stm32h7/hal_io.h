@@ -34,6 +34,23 @@
 void hal_io_v_get_port( uint8_t pin, GPIO_TypeDef **port, uint32_t *pin_number );
 
 #ifdef BOARD_CHROMATRONX
+
+#define IO_PIN_GPIOSDA      0  
+#define IO_PIN_GPIOSCL      1  
+#define IO_PIN_GPIOSCK      2   
+#define IO_PIN_GPIOMOSI     3   
+#define IO_PIN_GPIOMISO     4   
+
+#define IO_PIN_COUNT		5
+
+#define IO_PIN_ANALOG_COUNT 0
+
+// vmon is probably wrong
+#define VMON_Pin 				GPIO_PIN_5
+#define VMON_GPIO_Port 			GPIOC
+
+
+
 // Chromatron X Analog
 // ADC12_INP8
 #define MEAS1_Pin 				PIO_PIN_5
@@ -110,14 +127,14 @@ void hal_io_v_get_port( uint8_t pin, GPIO_TypeDef **port, uint32_t *pin_number )
 #define AUX_UART_TX_GPIO_Port 	GPIOA
 #define PIX_CLK_2_Pin 			GPIO_PIN_10
 #define PIX_CLK_2_GPIO_Port 	GPIOC
-#define LED0_Pin 				GPIO_PIN_11
-#define LED0_GPIO_Port 			GPIOC
+#define LED2_Pin 				GPIO_PIN_11
+#define LED2_GPIO_Port 			GPIOC
 #define PIX_DAT_9_Pin 			GPIO_PIN_12
 #define PIX_DAT_9_GPIO_Port 	GPIOC
 #define PIX_CLK_1_Pin 			GPIO_PIN_3
 #define PIX_CLK_1_GPIO_Port 	GPIOD
-#define LED2_Pin 				GPIO_PIN_4
-#define LED2_GPIO_Port 			GPIOD
+#define LED0_Pin 				GPIO_PIN_4
+#define LED0_GPIO_Port 			GPIOD
 #define PIX_DAT_0_Pin 			GPIO_PIN_7
 #define PIX_DAT_0_GPIO_Port 	GPIOD
 #define PIX_CLK_5_Pin 			GPIO_PIN_13

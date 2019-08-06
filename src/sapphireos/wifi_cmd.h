@@ -184,7 +184,8 @@ typedef struct __attribute__((packed)){
 typedef struct __attribute__((packed)){
     bool low_power;
     bool led_quiet;
-    uint8_t padding[2];
+    int8_t midi_channel;
+    uint8_t padding[1];
 } wifi_msg_set_options_t;
 #define WIFI_DATA_ID_SET_OPTIONS        0x60
 
@@ -194,6 +195,8 @@ typedef struct __attribute__((packed)){
 } wifi_msg_vm_run_func_t;
 #define WIFI_DATA_ID_VM_RUN_FUNC        0x51
 
+
+#define WIFI_DATA_ID_SHUTDOWN           0x98
 
 #endif
 

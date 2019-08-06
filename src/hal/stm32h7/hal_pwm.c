@@ -30,7 +30,7 @@
 
 #include "sapphire.h"
 
-
+#ifndef BOARD_CHROMATRONX
 static TIM_HandleTypeDef pwm_timer;
 
 static uint32_t get_channel( uint8_t channel ){
@@ -52,7 +52,7 @@ static uint32_t get_channel( uint8_t channel ){
 
 void pwm_v_init( void ){
 
-	__HAL_RCC_TIM4_CLK_ENABLE();
+	__HAL_RCC_TIM1_CLK_ENABLE();
 
 	pwm_timer.Instance = TIM1;
 	pwm_timer.Init.Prescaler 			= 16;
@@ -128,9 +128,4 @@ void pwm_v_init_channel( uint8_t channel, uint16_t freq ){
 	HAL_TIM_PWM_ConfigChannel( &pwm_timer, &config, timer_channel );
 }
 
-
-
-
-
-
-
+#endif

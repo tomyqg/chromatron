@@ -128,7 +128,7 @@ static bool udp_busy;
 
 static uint8_t watchdog;
 
-// static mem_handle_t wifi_networks_handle = -1;
+static mem_handle_t wifi_networks_handle = -1;
 
 
 KV_SECTION_META kv_meta_t wifi_cfg_kv[] = {
@@ -314,6 +314,69 @@ void open_close_port( uint8_t protocol, uint16_t port, bool open ){
     }
 }
 
+static void transmit_udp( netmsg_t tx_netmsg ){
+
+    netmsg_state_t *netmsg_state = netmsg_vp_get_state( tx_netmsg );
+
+    ASSERT( netmsg_state->type == NETMSG_TYPE_UDP );
+
+    uint16_t data_len = 0;
+
+    uint16_t crc = crc_u16_start();
+
+    uint8_t *data = 0;
+    uint8_t *h2 = 0;
+    uint16_t h2_len = 0;
+
+    if( netmsg_state->data_handle > 0 ){
+
+        data = mem2_vp_get_ptr( netmsg_state->data_handle );
+        data_len = mem2_u16_get_size( netmsg_state->data_handle );
+    }
+
+    // header 2, if present
+    if( netmsg_state->header_2_handle > 0 ){
+
+        h2 = mem2_vp_get_ptr( netmsg_state->header_2_handle );
+        h2_len = mem2_u16_get_size( netmsg_state->header_2_handle );
+    }
+
+    // setup header
+    wifi_msg_udp_header_t udp_header;
+    udp_header.addr = netmsg_state->raddr.ipaddr;
+    udp_header.lport = netmsg_state->laddr.port;
+    udp_header.rport = netmsg_state->raddr.port;
+    udp_header.len = data_len + h2_len;
+    udp_header.crc = 0;
+    
+
+    uint16_t len = data_len + h2_len + sizeof(udp_header);
+
+    wifi_data_header_t header;
+    header.len      = len;
+    header.reserved = 0;
+    header.data_id  = WIFI_DATA_ID_UDP_EXT;
+    header.crc      = 0;                
+
+    crc = crc_u16_partial_block( crc, (uint8_t *)&header, sizeof(header) );
+    crc = crc_u16_partial_block( crc, (uint8_t *)&udp_header, sizeof(udp_header) );
+    crc = crc_u16_partial_block( crc, h2, h2_len );
+    crc = crc_u16_partial_block( crc, data, data_len );
+    header.crc = crc_u16_finish( crc );
+
+    hal_wifi_v_clear_rx_ready();
+
+    hal_wifi_v_usart_send_char( WIFI_COMM_DATA );
+    hal_wifi_v_usart_send_data( (uint8_t *)&header, sizeof(header) );
+    hal_wifi_v_usart_send_data( (uint8_t *)&udp_header, sizeof(udp_header) );
+    hal_wifi_v_usart_send_data( h2, h2_len );
+    hal_wifi_v_usart_send_data( data, data_len );   
+
+
+    // release netmsg
+    netmsg_v_release( tx_netmsg );
+}
+
 int8_t wifi_i8_send_udp( netmsg_t netmsg ){
 
     if( !wifi_b_connected() ){
@@ -321,7 +384,18 @@ int8_t wifi_i8_send_udp( netmsg_t netmsg ){
         return NETMSG_TX_ERR_RELEASE;
     }
 
+    // check if wifi comm is ready.
+    // if so, we can just send now instead of queuing.
+    if( hal_wifi_b_comm_ready() ){
+
+        transmit_udp( netmsg );
+
+        return NETMSG_TX_OK_NORELEASE;
+    }
+
     if( list_u8_count( &netmsg_list ) >= WIFI_MAX_NETMSGS ){
+
+        log_v_debug_P( PSTR("tx udp overflow") );
 
         return NETMSG_TX_ERR_RELEASE;   
     }
@@ -412,7 +486,7 @@ PT_BEGIN( pt );
             //     wifi_msg_scan_results_t *msg = (wifi_msg_scan_results_t *)mem2_vp_get_ptr( wifi_networks_handle );
 
             //     // search for matching networks and track best signal
-            //     int8_t best_rssi = -120;
+            //     // int8_t best_rssi = -120;
             //     int8_t best_index = -1;
 
             //     for( uint8_t i = 0; i < msg->count; i++ ){
@@ -421,10 +495,10 @@ PT_BEGIN( pt );
 
             //         // is this RSSI any good?
 
-            //         if( msg->networks[i].rssi <= best_rssi ){
+            //         // if( msg->networks[i].rssi <= best_rssi ){
 
-            //             continue;
-            //         }
+            //         //     continue;
+            //         // }
 
             //         // do we have this SSID?
             //         for( uint8_t j = 0; j < cnt_of_array(network_hashes); j++ ){
@@ -435,7 +509,7 @@ PT_BEGIN( pt );
 
             //                 // record RSSI and index
             //                 best_index = j;
-            //                 best_rssi = msg->networks[i].rssi;
+            //                 // best_rssi = msg->networks[i].rssi;
 
             //                 break;
             //             }
@@ -513,6 +587,13 @@ PT_BEGIN( pt );
                 if( router >= 4 ){
 
                     router = 0;
+
+                    // if we are in recovery mode and we've cycled through all
+                    // of the routers, start up the AP
+                    if( sys_b_is_recovery_mode() ){
+
+                        default_ap_mode = TRUE;
+                    }
                 }
             }
         }
@@ -531,7 +612,7 @@ PT_BEGIN( pt );
             cfg_i8_get( CFG_PARAM_WIFI_AP_PASSWORD, ap_msg.pass );
 
             // check if AP mode SSID is set:
-            if( ap_msg.ssid[0] == 0 ){
+            if( ( ap_msg.ssid[0] == 0 ) || ( default_ap_mode ) ){
 
                 // set up default AP
                 memset( ap_msg.ssid, 0, sizeof(ap_msg.ssid) );
@@ -633,7 +714,16 @@ static int8_t process_rx_data( void ){
 
     wifi_data_header_t *header = (wifi_data_header_t *)&rx_buf[1];
 
-    memcpy( buf, &rx_buf[1], sizeof(wifi_data_header_t) + header->len );
+    uint16_t msg_len = sizeof(wifi_data_header_t) + header->len ;
+
+    // validate msg size
+    if( msg_len > WIFI_UART_RX_BUF_SIZE ){
+
+        log_v_debug_P( PSTR("Wifi msg len error. ID:0x%02x len:%d"), header->data_id, header->len );
+        goto len_error;
+    }   
+
+    memcpy( buf, &rx_buf[1], msg_len );
 
     hal_wifi_v_release_rx_buffer();
 
@@ -643,10 +733,10 @@ static int8_t process_rx_data( void ){
     uint16_t msg_crc = header->crc;
     header->crc = 0;
 
+    uint16_t computed_crc = crc_u16_block( (uint8_t *)header, msg_len );
+    if( computed_crc != msg_crc ){
 
-    if( crc_u16_block( (uint8_t *)header, header->len + sizeof(wifi_data_header_t) ) != msg_crc ){
-
-        log_v_debug_P( PSTR("Wifi crc error: %d"), header->data_id );
+        log_v_debug_P( PSTR("Wifi crc error. ID:0x%02x len:%d crc: 0x%04x != 0x%04x"), header->data_id, header->len, computed_crc, msg_crc );
         status = -2;
         goto end;
     }
@@ -840,25 +930,25 @@ static int8_t process_rx_data( void ){
             status = 1;
         }   
     }
-    // else if( header->data_id == WIFI_DATA_ID_WIFI_SCAN_RESULTS ){
+    else if( header->data_id == WIFI_DATA_ID_WIFI_SCAN_RESULTS ){
     
-    //     if( wifi_networks_handle < 0 ){        
+        if( wifi_networks_handle < 0 ){        
 
-    //         wifi_networks_handle = mem2_h_alloc( sizeof(wifi_msg_scan_results_t) );
+            wifi_networks_handle = mem2_h_alloc( sizeof(wifi_msg_scan_results_t) );
 
-    //         if( wifi_networks_handle > 0 ){
+            if( wifi_networks_handle > 0 ){
 
-    //             memcpy( mem2_vp_get_ptr( wifi_networks_handle ), data, sizeof(wifi_msg_scan_results_t) );
-    //         }
-    //     }
+                memcpy( mem2_vp_get_ptr( wifi_networks_handle ), data, sizeof(wifi_msg_scan_results_t) );
+            }
+        }
 
-    //     // wifi_msg_scan_results_t *msg = (wifi_msg_scan_results_t *)data;
+        // wifi_msg_scan_results_t *msg = (wifi_msg_scan_results_t *)data;
 
-    //     // for( uint8_t i = 0; i < msg->count; i++ ){
+        // for( uint8_t i = 0; i < msg->count; i++ ){
 
-    //     //     log_v_debug_P(PSTR("%ld %lu"), msg->networks[i].rssi, msg->networks[i].ssid_hash );
-    //     // }
-    // }
+        //     log_v_debug_P(PSTR("%ld %lu"), msg->networks[i].rssi, msg->networks[i].ssid_hash );
+        // }
+    }
     else if( header->data_id == WIFI_DATA_ID_DEBUG_PRINT ){
 
         log_v_debug_P( PSTR("ESP: %s"), data );
@@ -894,7 +984,7 @@ end:
 PT_THREAD( wifi_comm_thread( pt_t *pt, void *state ) )
 {
 PT_BEGIN( pt );
-
+    
 restart:
     
     watchdog = WIFI_WATCHDOG_TIMEOUT;
@@ -924,7 +1014,6 @@ restart:
     // set ready and wait for message
     hal_wifi_v_set_rx_ready();
 
-        
     while(1){
 
         thread_v_set_signal_flag();
@@ -990,65 +1079,7 @@ restart:
             
             netmsg_t tx_netmsg = list_ln_remove_tail( &netmsg_list );
 
-            netmsg_state_t *netmsg_state = netmsg_vp_get_state( tx_netmsg );
-
-            ASSERT( netmsg_state->type == NETMSG_TYPE_UDP );
-
-            uint16_t data_len = 0;
-
-            uint16_t crc = crc_u16_start();
-
-            uint8_t *data = 0;
-            uint8_t *h2 = 0;
-            uint16_t h2_len = 0;
-
-            if( netmsg_state->data_handle > 0 ){
-
-                data = mem2_vp_get_ptr( netmsg_state->data_handle );
-                data_len = mem2_u16_get_size( netmsg_state->data_handle );
-            }
-
-            // header 2, if present
-            if( netmsg_state->header_2_handle > 0 ){
-
-                h2 = mem2_vp_get_ptr( netmsg_state->header_2_handle );
-                h2_len = mem2_u16_get_size( netmsg_state->header_2_handle );
-            }
-
-            // setup header
-            wifi_msg_udp_header_t udp_header;
-            udp_header.addr = netmsg_state->raddr.ipaddr;
-            udp_header.lport = netmsg_state->laddr.port;
-            udp_header.rport = netmsg_state->raddr.port;
-            udp_header.len = data_len + h2_len;
-            udp_header.crc = 0;
-            
-
-            uint16_t len = data_len + h2_len + sizeof(udp_header);
-
-            wifi_data_header_t header;
-            header.len      = len;
-            header.reserved = 0;
-            header.data_id  = WIFI_DATA_ID_UDP_EXT;
-            header.crc      = 0;                
-
-            crc = crc_u16_partial_block( crc, (uint8_t *)&header, sizeof(header) );
-            crc = crc_u16_partial_block( crc, (uint8_t *)&udp_header, sizeof(udp_header) );
-            crc = crc_u16_partial_block( crc, h2, h2_len );
-            crc = crc_u16_partial_block( crc, data, data_len );
-            header.crc = crc_u16_finish( crc );
-
-            hal_wifi_v_clear_rx_ready();
-
-            hal_wifi_v_usart_send_char( WIFI_COMM_DATA );
-            hal_wifi_v_usart_send_data( (uint8_t *)&header, sizeof(header) );
-            hal_wifi_v_usart_send_data( (uint8_t *)&udp_header, sizeof(udp_header) );
-            hal_wifi_v_usart_send_data( h2, h2_len );
-            hal_wifi_v_usart_send_data( data, data_len );   
-        
-
-            // release netmsg
-            netmsg_v_release( tx_netmsg );
+            transmit_udp( tx_netmsg );
         }
 
 receive:
@@ -1059,7 +1090,7 @@ receive:
         }
 
         max_ready_wait = hal_wifi_u32_get_max_ready_wait();
-            
+
         THREAD_YIELD( pt );
         THREAD_YIELD( pt );
     }
@@ -1104,6 +1135,11 @@ PT_BEGIN( pt );
             memset( options_msg.padding, 0, sizeof(options_msg.padding) );
             options_msg.led_quiet = cfg_b_get_boolean( CFG_PARAM_ENABLE_LED_QUIET_MODE );
             options_msg.low_power = cfg_b_get_boolean( CFG_PARAM_ENABLE_LOW_POWER_MODE );
+
+            if( kv_i8_get( __KV__midi_channel, &options_msg.midi_channel, sizeof(options_msg.midi_channel) ) < 0 ){
+
+                options_msg.midi_channel = -1;                
+            }
 
             wifi_i8_send_msg( WIFI_DATA_ID_SET_OPTIONS, (uint8_t *)&options_msg, sizeof(options_msg) );
         }
@@ -1492,6 +1528,11 @@ void wifi_v_init( void ){
                         PSTR("wifi_echo"),
                         0,
                         0 );
+}
+
+void wifi_v_shutdown( void ){
+
+    wifi_i8_send_msg_blocking( WIFI_DATA_ID_SHUTDOWN, 0, 0 );
 }
 
 bool wifi_b_connected( void ){

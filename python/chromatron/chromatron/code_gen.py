@@ -165,7 +165,9 @@ class cg1GenericObject(cg1Node):
         self.kw = kw
 
     def build(self, builder):
-        builder.generic_object(self.name, args, self.kw, lineno=self.lineno)
+        # should not get here
+        assert False
+        # builder.generic_object(self.name, args, self.kw, lineno=self.lineno)
 
 
 class cg1Var(cg1Node):
@@ -176,12 +178,6 @@ class cg1Var(cg1Node):
 
         self.name = name
         
-        if self.name == 'False':
-            self.name = 0
-
-        elif self.name == 'True':
-            self.name = 1
-
         self.type = None
 
     def build(self, builder, depth=None):
@@ -248,8 +244,9 @@ class cg1Module(cg1Node):
             elif isinstance(node, cg1Assign):
                 if isinstance(node.value, cg1GenericObject):
                     args = [a.build(builder) for a in node.value.args]
+                    kw = {k: v.build(builder) for k, v in node.value.kw.items()}
 
-                    builder.generic_object(node.target.name, node.value.name, args, node.value.kw, lineno=node.lineno)
+                    builder.generic_object(node.target.name, node.value.name, args, kw, lineno=node.lineno)
 
                 else:
                     raise SyntaxError("Unknown declaration in module body: %s" % (node.target.name), lineno=node.lineno)
@@ -259,7 +256,7 @@ class cg1Module(cg1Node):
                     send = True
                     src = node.params[0].s
                     dest = node.params[1].s
-                    query = [a.s for a in node.params[2].value]
+                    query = [a.s for a in node.params[2].items]
 
                     builder.link(send, src, dest, query, lineno=node.lineno)
 
@@ -267,7 +264,7 @@ class cg1Module(cg1Node):
                     send = False
                     src = node.params[1].s
                     dest = node.params[0].s
-                    query = [a.s for a in node.params[2].value]
+                    query = [a.s for a in node.params[2].items]
 
                     builder.link(send, src, dest, query, lineno=node.lineno)
 
@@ -410,15 +407,25 @@ class cg1UnaryNot(cg1CodeNode):
 
         return builder.unary_not(value, lineno=self.lineno)
 
-class cg1List(cg1CodeNode):
-    _fields = ["value"]
+class cg1Tuple(cg1CodeNode):
+    _fields = ["items"]
 
-    def __init__(self, value, **kwargs):
-        super(cg1List, self).__init__(**kwargs)
-        self.value = value
+    def __init__(self, items, **kwargs):
+        super(cg1Tuple, self).__init__(**kwargs)
+        self.items = items
 
     def build(self, builder):
-        pass
+        return [item.name for item in self.items]
+
+class cg1List(cg1CodeNode):
+    _fields = ["items"]
+
+    def __init__(self, items, **kwargs):
+        super(cg1List, self).__init__(**kwargs)
+        self.items = items
+
+    def build(self, builder):
+        return [item.name for item in self.items]
         
 
 class cg1For(cg1CodeNode): 
@@ -592,18 +599,6 @@ class cg1StrLiteral(cg1CodeNode):
         return builder.add_string(self.s, lineno=self.lineno)
 
 
-
-class cg1Tuple(cg1CodeNode):
-    _fields = ["items"]
-
-    def __init__(self, items, **kwargs):
-        super(cg1Tuple, self).__init__(**kwargs)
-        self.items = items
-
-    def build(self, builder):
-        return builder.add_tuple(self.items, lineno=self.lineno)
-
-
 class CodeGenPass1(ast.NodeVisitor):
     def __init__(self):
         self._declarations = {
@@ -613,6 +608,7 @@ class CodeGenPass1(ast.NodeVisitor):
             'Array': self._handle_Array,
             'Record': self._handle_Record,
             'PixelArray': self.create_GenericObject,
+            'Palette': self.create_GenericObject,
         }
 
         self._record_types = {}
@@ -711,6 +707,9 @@ class CodeGenPass1(ast.NodeVisitor):
 
         elif data_type == 'Fixed16':
             data_type = 'f16'
+
+        elif data_type == 'String':
+            data_type = 'str'
         
         for kw in node.keywords:
             if kw.arg == 'type':
@@ -973,12 +972,12 @@ def compile_text(source, debug_print=False, summarize=False, script_name=''):
     if debug_print:
         print(builder)
 
-    data = builder.allocate()
-    code = builder.generate_instructions()
+    builder.allocate()
+    builder.generate_instructions()
 
     if debug_print:
-        builder.print_instructions(code)
-        builder.print_data_table(data)
+        builder.print_instructions()
+        builder.print_data_table()
         builder.print_control_flow()
 
     builder.assemble()

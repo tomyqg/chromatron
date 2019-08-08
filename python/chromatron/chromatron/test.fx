@@ -1,13 +1,37 @@
-# a = String(publish=True)
-b = String(publish=True)
-c = String(32, publish=True)
+i = Number()
+a = Number()
+b = Number()
 
 def init():
-    # a = "test"
-    s = String('test2')
-    b = s
-    # c = a
-    b = c
+    while i < 0:
+        for x in pixels.size_x:
+            a += 1
+
+    for y in pixels.size_x:
+        b -= 2
+
+        if b < 0:
+            break
+
+        elif b == 0:
+            pass
+            
+        else:
+            b += 1
+
+
+# # a = String(publish=True)
+# b = String(publish=True)
+# c = String(32, publish=True)
+
+# def init():
+#     # a = "test"
+#     s = String('test2')
+#     b = s
+#     # c = a
+#     b = c
+
+#     db.vm_prog = s
 
 
 # my_str = String("rainbow.fxb")

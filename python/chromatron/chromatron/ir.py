@@ -589,6 +589,7 @@ class irFunc(IR):
         self.ret_type = ret_type
         self.params = params
         self.body = body
+        self.root_block = None
 
         if self.params == None:
             self.params = []
@@ -1451,15 +1452,22 @@ class irIndexStore(IR):
         return insIndirectStore(self.value.generate(), self.address.generate())
 
 class irBlock(IR):
-    def __init__(self, **kwargs):
+    block_number = 0
+
+    def __init__(self, func, hint, depth, **kwargs):
         super(irBlock, self).__init__(**kwargs)
+        self.func = func
+        self.hint = hint
+        self.depth = depth
+        self.block_number = irBlock.block_number
+        irBlock.block_number += 1
         self.code = []
         self.data = []
         self.blocks = []
 
-    # def __str__(self):
-        # s = '----------------'
-        # return s    
+    def __str__(self):
+        s = 'Block: %16s.%d (%8s) d:%d Line: %d' % (self.func, self.block_number, self.hint, self.depth, self.lineno)
+        return s    
 
     def append_code(self, code):
         self.code.append(code)
@@ -1604,16 +1612,21 @@ class Builder(object):
 
         return s
 
-    def open_block(self, lineno=None):
-        return
-        self.current_block = irBlock(lineno=lineno)
-        self.block_stack.append(self.current_block)
+    def open_block(self, hint, lineno=None):
+        block = irBlock(self.current_func, hint, len(self.block_stack), lineno=lineno)
+        if self.current_block != None:
+            self.current_block.append_block(block)
 
-        # print "open", self.current_block
+        self.block_stack.append(block)
 
-    def close_block(self):
-        return
-        # print "close", self.current_block
+        self.debug_print("open  %s" % block)
+
+        self.current_block = block
+
+        return block
+
+    def close_block(self, lineno=None):
+        self.debug_print("close %s" % self.current_block)
         self.block_stack.pop(-1)
         try:
             self.current_block = self.block_stack[-1]
@@ -1860,10 +1873,7 @@ class Builder(object):
         if len(self.block_stack) > 0:
             self.close_block()
 
-        self.open_block(lineno=kwargs['lineno'])
-        # self.blocks = irBlock(lineno=0)
-        # self.current_block = self.blocks
-        # self.block_stack = [self.current_block]
+        func.root_block = self.open_block('func', lineno=kwargs['lineno'])
 
         return func
 
@@ -2276,6 +2286,8 @@ class Builder(object):
         return ir
 
     def ifelse(self, test, lineno=None):
+        self.open_block('if', lineno=lineno)
+
         body_label = self.label('if.then', lineno=lineno)
         else_label = self.label('if.else', lineno=lineno)
         end_label = self.label('if.end', lineno=lineno)
@@ -2290,11 +2302,18 @@ class Builder(object):
 
         return body_label, else_label, end_label
 
+    def do_else(self, lineno=None):
+        self.close_block()
+        self.open_block('else', lineno=lineno)
+
+    def end_ifelse(self, lineno=None):
+        self.close_block()
+
     def position_label(self, label):
         self.append_node(label)
         
     def begin_while(self, lineno=None):
-        self.open_block(lineno=lineno)
+        self.open_block('while', lineno=lineno)
 
         top_label = self.label('while.top', lineno=lineno)
         end_label = self.label('while.end', lineno=lineno)
@@ -2319,7 +2338,7 @@ class Builder(object):
         self.close_block()
 
     def begin_for(self, iterator, lineno=None):
-        self.open_block(lineno=lineno)
+        self.open_block('for', lineno=lineno)
 
         begin_label = self.label('for.begin', lineno=lineno) # we don't actually need this label, but it is helpful for reading the IR
         self.position_label(begin_label)
@@ -2794,7 +2813,7 @@ class Builder(object):
         return liveness
 
     def debug_print(self, s):
-        # print s
+        print s
         pass
 
     def allocate(self):

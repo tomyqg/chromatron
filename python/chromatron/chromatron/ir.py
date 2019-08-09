@@ -1530,7 +1530,20 @@ class irBlock(IR):
         if self.parent != None:
             return self.parent.get_local(name)
 
-        raise KeyError
+        raise KeyError(name)
+
+    def remove_local(self, name):
+        # check if local is within this block:
+        if name in self.locals:
+            del self.locals[name]
+            return
+
+        # if not, check parent, if we have one
+        if self.parent != None:
+            self.parent.remove_local(name)
+
+        else:
+            raise KeyError(name)
 
 CONST65535 = irConst(65535, lineno=0)
 
@@ -1926,8 +1939,9 @@ class Builder(object):
         return ir
 
     def remove_local_var(self, var):
-        print 'remove', var
-        del self.locals[self.current_block.name][var.name]
+        self.debug_print('remove %s' % var)
+        self.current_block.remove_local(var.name)
+        # del self.locals[self.current_block.name][var.name]
 
     def func(self, *args, **kwargs):
         func = irFunc(*args, **kwargs)
@@ -3092,24 +3106,40 @@ class Builder(object):
 
                         a.addr = trash_var.addr
 
-                    
-            for func_name, local in self.locals.items():
-                for i in local.values():
-                    # assign func name to var
-                    i.name = '%s.%s' % (func_name, i.name)
+            for block in self.blocks:
+                for i in block.locals.values():
+                    # assign block name to var
+                    i.name = '%s.%s' % (block.name, i.name)
 
                     self.data_table.append(i)
 
+            # for func_name, local in self.locals.items():
+            #     for i in local.values():
+            #         # assign func name to var
+            #         i.name = '%s.%s' % (func_name, i.name)
+
+            #         self.data_table.append(i)
+
         else:
-            for func_name, local in self.locals.items():
-                for i in local.values():
+            for block in self.blocks:
+                for i in block.locals.values():
                     i.addr = addr
                     addr += i.length
 
-                    # assign func name to var
-                    i.name = '%s.%s' % (func_name, i.name)
+                    # assign block name to var
+                    i.name = '%s.%s' % (block.name, i.name)
 
                     self.data_table.append(i)
+
+            # for func_name, local in self.locals.items():
+            #     for i in local.values():
+            #         i.addr = addr
+            #         addr += i.length
+
+            #         # assign func name to var
+            #         i.name = '%s.%s' % (func_name, i.name)
+
+            #         self.data_table.append(i)
 
         # scan instructions for referenced string literals
         used_strings = []

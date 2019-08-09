@@ -602,7 +602,7 @@ class irFunc(IR):
 
     def insert(self, index, node):
         self.body.insert(index, node)
-        
+
     def remove_dead_labels(self):
         labels = self.labels()
 
@@ -1822,9 +1822,13 @@ class Builder(object):
         if name in self.globals:
             raise VariableAlreadyDeclared("Variable '%s' already declared as global" % (name), lineno=lineno)
 
-        # allowing local var redeclaration for now...
-        # if name in self.locals[self.current_block.name]:
-            # raise VariableAlreadyDeclared("Local variable '%s' already declared" % (name), lineno=lineno)
+        try:
+            self.current_block.get_local(name)
+
+            raise VariableAlreadyDeclared("Local variable '%s' already declared" % (name), lineno=lineno)
+
+        except KeyError:
+            pass # this is ok
 
         if keywords != None:
             if 'publish' in keywords:
@@ -2364,7 +2368,6 @@ class Builder(object):
 
         if not isinstance(test, irBinop):
             result = self.add_temp(lineno=lineno)
-            print 'ifelse', result
             self.assign(result, test, lineno=lineno)
             test = result
 
@@ -2884,7 +2887,7 @@ class Builder(object):
         return liveness
 
     def debug_print(self, s):
-        print s
+        # print s
         pass
 
     def allocate(self):

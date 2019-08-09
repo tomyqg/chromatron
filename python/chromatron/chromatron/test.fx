@@ -1,23 +1,40 @@
-i = Number()
-a = Number()
-b = Number()
+
+a = Number(publish=True)
+global_i = Number(publish=True)
+global_x = Number(publish=True)
 
 def init():
-    while i < 0:
-        for x in pixels.size_x:
-            a += 1
-
-    for y in pixels.size_x:
-        b -= 2
-
-        if b < 0:
-            break
-
-        elif b == 0:
-            pass
+    for x in 4:
+        for i in 10:
+            global_i = i
             
-        else:
-            b += 1
+            if i > 5:
+                continue
+
+            a += 1
+                
+        global_x = x
+
+# i = Number()
+# a = Number()
+# b = Number()
+
+# def init():
+#     while i < 0:
+#         for x in pixels.size_x:
+#             a += 1
+
+#     for y in pixels.size_x:
+#         b -= 2
+
+#         if b < 0:
+#             break
+
+#         elif b == 0:
+#             pass
+            
+#         else:
+#             b += 1
 
 
 # # a = String(publish=True)

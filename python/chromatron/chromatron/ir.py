@@ -588,40 +588,14 @@ class irFunc(IR):
         self.name = name
         self.ret_type = ret_type
         self.params = params
-        self.body = body
         self.root_block = None
 
         if self.params == None:
             self.params = []
 
-        if self.body == None:
-            self.body = []
-
-    def append(self, node):
-        self.body.append(node)
-
-    def insert(self, index, node):
-        self.body.insert(index, node)
-
     def remove_dead_labels(self):
-        labels = self.labels()
+        self.root_block.remove_dead_labels()
 
-        keep = []
-
-        # get list of labels that are used
-        for label in labels:
-            for node in self.body:
-                target = node.get_jump_target()
-
-                if target != None:
-                    if target.name == label:
-                        keep.append(label)
-                        break
-
-        # remove unused labels from instruction list
-        self.body = [a for a in self.body \
-                        if not isinstance(a, irLabel) or 
-                        (a.name in keep)]
 
     def __str__(self):
         global source_code
@@ -631,45 +605,34 @@ class irFunc(IR):
         s += "Func %s(%s) -> %s\n" % (self.name, params, self.ret_type)
         s += "--------------------------------\n"
 
-        labels = self.labels()
+        # labels = self.labels()
 
-        current_line = -1
-        for node in self.body:
+        # current_line = -1
+        # for node in self.body:
             
-            # interleave source code
-            if node.lineno > current_line:
-                current_line = node.lineno
-                try:
-                    s += "%d\t%s\n" % (current_line, source_code[current_line - 1].strip())
+        #     # interleave source code
+        #     if node.lineno > current_line:
+        #         current_line = node.lineno
+        #         try:
+        #             s += "%d\t%s\n" % (current_line, source_code[current_line - 1].strip())
 
-                except IndexError:
-                    print "Source interleave from imported files not yet supported"
-                    pass
+        #         except IndexError:
+        #             print "Source interleave from imported files not yet supported"
+        #             pass
 
-            if isinstance(node, irLabel):
-                s += '%s\n' % (node)
+        #     if isinstance(node, irLabel):
+        #         s += '%s\n' % (node)
 
-            else:    
-                label = node.get_jump_target()
+        #     else:    
+        #         label = node.get_jump_target()
 
-                if label != None:
-                    s += '\t\t\t%s (Line %d)\n' % (node, label.lineno)
+        #         if label != None:
+        #             s += '\t\t\t%s (Line %d)\n' % (node, label.lineno)
 
-                else:
-                    s += '\t\t\t%s\n' % (node)
+        #         else:
+        #             s += '\t\t\t%s\n' % (node)
 
         return s
-
-    def labels(self):
-        labels = {}
-
-        for i in xrange(len(self.body)):
-            ins = self.body[i]
-
-            if isinstance(ins, irLabel):
-                labels[ins.name] = i
-
-        return labels
 
     def generate(self):
         params = [a.generate() for a in self.params]
@@ -1498,6 +1461,29 @@ class irBlock(IR):
 
         return s    
 
+    def remove_dead_labels(self):
+        labels = self.labels()
+
+        keep = []
+
+        # get list of labels that are used
+        for label in labels:
+            for node in self.code:
+                target = node.get_jump_target()
+
+                if target != None:
+                    if target.name == label:
+                        keep.append(label)
+                        break
+
+        # remove unused labels from instruction list
+        self.code = [a for a in self.code \
+                        if not isinstance(a, irLabel) or 
+                        (a.name in keep)]
+
+        for block in self.blocks:
+            block.remove_dead_labels()
+
     def labels(self):
         labels = {}
 
@@ -1709,9 +1695,9 @@ class Builder(object):
         for func in self.funcs.values():
             func.remove_dead_labels()
 
-        for func in self.funcs.values():
+        for block in self.blocks:
             prev_line = 0
-            for ir in func.body:
+            for ir in block.code:
                 if isinstance(ir, irLabel):
                     ir.lineno = prev_line
 
@@ -1950,8 +1936,6 @@ class Builder(object):
         return func
 
     def append_node(self, node):
-        self.funcs[self.current_func].append(node)
-
         self.current_block.append_code(node)
 
     def get_current_node(self):

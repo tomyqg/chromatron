@@ -596,7 +596,6 @@ class irFunc(IR):
     def remove_dead_labels(self):
         self.root_block.remove_dead_labels()
 
-
     def __str__(self):
         global source_code
         params = params_to_string(self.params)
@@ -605,40 +604,46 @@ class irFunc(IR):
         s += "Func %s(%s) -> %s\n" % (self.name, params, self.ret_type)
         s += "--------------------------------\n"
 
-        # labels = self.labels()
+        labels = self.labels()
 
-        # current_line = -1
-        # for node in self.body:
+        current_line = -1
+        for node in self.code():
             
-        #     # interleave source code
-        #     if node.lineno > current_line:
-        #         current_line = node.lineno
-        #         try:
-        #             s += "%d\t%s\n" % (current_line, source_code[current_line - 1].strip())
+            # interleave source code
+            if node.lineno > current_line:
+                current_line = node.lineno
+                try:
+                    s += "%d\t%s\n" % (current_line, source_code[current_line - 1].strip())
 
-        #         except IndexError:
-        #             print "Source interleave from imported files not yet supported"
-        #             pass
+                except IndexError:
+                    print "Source interleave from imported files not yet supported"
+                    pass
 
-        #     if isinstance(node, irLabel):
-        #         s += '%s\n' % (node)
+            if isinstance(node, irLabel):
+                s += '%s\n' % (node)
 
-        #     else:    
-        #         label = node.get_jump_target()
+            else:    
+                label = node.get_jump_target()
 
-        #         if label != None:
-        #             s += '\t\t\t%s (Line %d)\n' % (node, label.lineno)
+                if label != None:
+                    s += '\t\t\t%s (Line %d)\n' % (node, label.lineno)
 
-        #         else:
-        #             s += '\t\t\t%s\n' % (node)
+                else:
+                    s += '\t\t\t%s\n' % (node)
 
         return s
+
+    def labels(self):
+        return self.root_block.labels()
+
+    def code(self):
+        return self.root_block.get_code()
 
     def generate(self):
         params = [a.generate() for a in self.params]
         func = insFunction(self.name, params)
         ins = [func]
-        for ir in self.body:
+        for ir in self.code():
             code = ir.generate()
 
             try:
@@ -1495,6 +1500,18 @@ class irBlock(IR):
 
         return labels
 
+    def get_code(self):
+        code = []
+
+        for ir in self.code:
+            if isinstance(ir, irBlock):
+                code.extend(ir.get_code())
+
+            else:
+                code.append(ir)
+
+        return code
+
     def append_code(self, code):
         self.code.append(code)
 
@@ -1503,6 +1520,7 @@ class irBlock(IR):
 
     def append_block(self, block):
         self.blocks.append(block)
+        self.code.append(block)
 
     def get_local(self, name):
         # check if local is within this block:
@@ -1600,8 +1618,8 @@ class Builder(object):
         # optimizations
         self.optimizations = {
             'fold_constants': True,
-            'optimize_register_usage': True,
-            'remove_unreachable_code': True,
+            'optimize_register_usage': False,
+            'remove_unreachable_code': False,
             'optimize_assign_targets': True,
         }
 
@@ -2706,13 +2724,14 @@ class Builder(object):
             jumps_taken = []
 
 
-        code = self.funcs[func]
-        labels = code.labels()
+        func_obj = self.funcs[func]
+        labels = func_obj.labels()
         
         cfg.append(sequence)
 
+        code = func_obj.code()
         while True:
-            ins = code.body[pc]
+            ins = code[pc]
 
             sequence.append(pc)
             
@@ -3101,7 +3120,7 @@ class Builder(object):
         # scan instructions for referenced string literals
         used_strings = []
         for func in self.funcs:
-            for ins in self.funcs[func].body:
+            for ins in self.funcs[func].code():
                 for var in ins.get_input_vars():
                     if isinstance(var, irStrLiteral) and var not in used_strings:
                         used_strings.append(var)
@@ -3203,6 +3222,7 @@ class Builder(object):
                 i += 1
 
     def print_control_flow(self):
+        return
         print "CONTROL FLOW: "
         
         for func in self.funcs:

@@ -1466,8 +1466,49 @@ class irBlock(IR):
         self.blocks = []
 
     def __str__(self):
-        s = 'Block: %16s.%d (%8s) d:%d Line: %d' % (self.func, self.block_number, self.hint, self.depth, self.lineno)
+        global source_code
+        s = 'Block: %16s.%d (%8s) d:%d Line: %d\n' % (self.func, self.block_number, self.hint, self.depth, self.lineno)
+        s += '########################################\n'
+        labels = self.labels()
+
+        current_line = -1
+        for node in self.code:
+            
+            # interleave source code
+            if node.lineno > current_line:
+                current_line = node.lineno
+                try:
+                    s += "%d\t%s\n" % (current_line, source_code[current_line - 1].strip())
+
+                except IndexError:
+                    print "Source interleave from imported files not yet supported"
+                    pass
+
+            if isinstance(node, irLabel):
+                s += '%s\n' % (node)
+
+            else:    
+                label = node.get_jump_target()
+
+                if label != None:
+                    s += '\t\t\t%s (Line %d)\n' % (node, label.lineno)
+
+                else:
+                    s += '\t\t\t%s\n' % (node)
+
+
         return s    
+
+    def labels(self):
+        labels = {}
+
+        for i in xrange(len(self.code)):
+            ins = self.code[i]
+
+            if isinstance(ins, irLabel):
+                labels[ins.name] = i
+
+        return labels
 
     def append_code(self, code):
         self.code.append(code)
@@ -1879,6 +1920,8 @@ class Builder(object):
 
     def append_node(self, node):
         self.funcs[self.current_func].append(node)
+
+        self.current_block.append_code(node)
 
     def get_current_node(self):
         return self.funcs[self.current_func].get(-1)

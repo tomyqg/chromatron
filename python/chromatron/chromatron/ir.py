@@ -603,8 +603,8 @@ class irFunc(IR):
     def insert(self, index, node):
         self.body.insert(index, node)
 
-    def get(self, index):
-        return self.body[index]
+    # def get_current_node(self):
+        # return self.body[-1]
 
     def remove_dead_labels(self):
         labels = self.labels()
@@ -1454,16 +1454,18 @@ class irIndexStore(IR):
 class irBlock(IR):
     block_number = 0
 
-    def __init__(self, func, hint, depth, **kwargs):
+    def __init__(self, func, hint, depth, parent, **kwargs):
         super(irBlock, self).__init__(**kwargs)
         self.func = func
         self.hint = hint
         self.depth = depth
         self.block_number = irBlock.block_number
+        self.name = '%s.%d' % (self.func, self.block_number)
         irBlock.block_number += 1
         self.code = []
-        self.data = []
+        self.locals = {}
         self.blocks = []
+        self.parent = parent
 
     def __str__(self):
         global source_code
@@ -1513,12 +1515,22 @@ class irBlock(IR):
     def append_code(self, code):
         self.code.append(code)
 
-    def append_data(self, data):
-        self.data.append(data)
+    def append_local(self, name, data):
+        self.locals[name] = data
 
     def append_block(self, block):
         self.blocks.append(block)
 
+    def get_local(self, name):
+        # check if local is within this block:
+        if name in self.locals:
+            return self.locals[name]
+
+        # if not, check parent, if we have one
+        if self.parent != None:
+            return self.parent.get_local(name)
+
+        raise KeyError
 
 CONST65535 = irConst(65535, lineno=0)
 
@@ -1538,14 +1550,14 @@ class Builder(object):
             pass
 
         self.funcs = {}
-        self.locals = {}
+        # self.locals = {}
         self.globals = {}
         self.objects = {}
         self.pixel_arrays = {}
         self.palettes = {}
         self.labels = {}
 
-        # self.blocks = None
+        self.blocks = []
         self.current_block = None
         self.block_stack = []
 
@@ -1636,11 +1648,17 @@ class Builder(object):
             s += '%d\t%s\n' % (i.lineno, i)
 
         s += 'Locals:\n'
-        for fname in sorted(self.locals.keys()):
-            if len(self.locals[fname].values()) > 0:
+        block_locals = {}
+        for block in self.blocks:
+            if block.func not in block_locals:
+                block_locals[block.func] = {}
+            block_locals[block.func].update(block.locals)
+
+        for fname in sorted(block_locals.keys()):
+            if len(block_locals[fname].values()) > 0:
                 s += '\t%s\n' % (fname)
 
-                for l in sorted(self.locals[fname].values()):
+                for l in sorted(block_locals[fname].values()):
                     s += '%d\t\t%s\n' % (l.lineno, l)
 
         s += 'PixelArrays:\n'
@@ -1654,13 +1672,16 @@ class Builder(object):
         return s
 
     def open_block(self, hint, lineno=None):
-        block = irBlock(self.current_func, hint, len(self.block_stack), lineno=lineno)
+        block = irBlock(self.current_func, hint, len(self.block_stack), self.current_block, lineno=lineno)
         if self.current_block != None:
             self.current_block.append_block(block)
 
         self.block_stack.append(block)
+        self.blocks.append(block)
 
         self.debug_print("open  %s" % block)
+
+        # self.locals[block.name] = {}
 
         self.current_block = block
 
@@ -1795,7 +1816,7 @@ class Builder(object):
             raise VariableAlreadyDeclared("Variable '%s' already declared as global" % (name), lineno=lineno)
 
         # allowing local var redeclaration for now...
-        # if name in self.locals[self.current_func]:
+        # if name in self.locals[self.current_block.name]:
             # raise VariableAlreadyDeclared("Local variable '%s' already declared" % (name), lineno=lineno)
 
         if keywords != None:
@@ -1809,10 +1830,12 @@ class Builder(object):
 
         try:
             for v in ir:
-                self.locals[self.current_func][v.name] = v
+                self.current_block.append_local(v.name, v)
+                # self.locals[self.current_block.name][v.name] = v
 
         except TypeError:
-            self.locals[self.current_func][name] = ir
+            self.current_block.append_local(name, ir)
+            # self.locals[self.current_block.name][name] = ir
 
         return ir
 
@@ -1833,7 +1856,8 @@ class Builder(object):
             return self.globals[name]
 
         try:
-            return self.locals[self.current_func][name]
+            # return self.locals[self.current_block.name][name]
+            return self.current_block.get_local(name)
 
         except KeyError:
             raise VariableNotDeclared(name, "Variable '%s' not declared" % (name), lineno=lineno)
@@ -1884,9 +1908,9 @@ class Builder(object):
         self.next_temp += 1
 
         ir = self.build_var(name, data_type, [], lineno=lineno)
-        self.locals[self.current_func][name] = ir
-
+        # self.locals[self.current_block.name][name] = ir
         ir.temp = True
+        self.current_block.append_local(name, ir)
 
         return ir
 
@@ -1902,12 +1926,13 @@ class Builder(object):
         return ir
 
     def remove_local_var(self, var):
-        del self.locals[self.current_func][var.name]
+        print 'remove', var
+        del self.locals[self.current_block.name][var.name]
 
     def func(self, *args, **kwargs):
         func = irFunc(*args, **kwargs)
         self.funcs[func.name] = func
-        self.locals[func.name] = {}
+        # self.locals[func.name] = {}
         self.current_func = func.name
         self.next_temp = 0 
 
@@ -1924,7 +1949,8 @@ class Builder(object):
         self.current_block.append_code(node)
 
     def get_current_node(self):
-        return self.funcs[self.current_func].get(-1)
+        # return self.funcs[self.current_func].get_current_node()
+        return self.current_block.code[-1]
 
     def ret(self, value, lineno=None):
         ir = irReturn(value, lineno=lineno)
@@ -2337,6 +2363,7 @@ class Builder(object):
 
         if not isinstance(test, irBinop):
             result = self.add_temp(lineno=lineno)
+            print 'ifelse', result
             self.assign(result, test, lineno=lineno)
             test = result
 

@@ -602,10 +602,7 @@ class irFunc(IR):
 
     def insert(self, index, node):
         self.body.insert(index, node)
-
-    # def get_current_node(self):
-        # return self.body[-1]
-
+        
     def remove_dead_labels(self):
         labels = self.labels()
 

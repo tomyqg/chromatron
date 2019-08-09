@@ -1563,7 +1563,6 @@ class Builder(object):
             pass
 
         self.funcs = {}
-        # self.locals = {}
         self.globals = {}
         self.objects = {}
         self.pixel_arrays = {}
@@ -1693,8 +1692,6 @@ class Builder(object):
         self.blocks.append(block)
 
         self.debug_print("open  %s" % block)
-
-        # self.locals[block.name] = {}
 
         self.current_block = block
 
@@ -1844,11 +1841,9 @@ class Builder(object):
         try:
             for v in ir:
                 self.current_block.append_local(v.name, v)
-                # self.locals[self.current_block.name][v.name] = v
 
         except TypeError:
             self.current_block.append_local(name, ir)
-            # self.locals[self.current_block.name][name] = ir
 
         return ir
 
@@ -1869,7 +1864,6 @@ class Builder(object):
             return self.globals[name]
 
         try:
-            # return self.locals[self.current_block.name][name]
             return self.current_block.get_local(name)
 
         except KeyError:
@@ -1921,7 +1915,6 @@ class Builder(object):
         self.next_temp += 1
 
         ir = self.build_var(name, data_type, [], lineno=lineno)
-        # self.locals[self.current_block.name][name] = ir
         ir.temp = True
         self.current_block.append_local(name, ir)
 
@@ -1941,12 +1934,10 @@ class Builder(object):
     def remove_local_var(self, var):
         self.debug_print('remove %s' % var)
         self.current_block.remove_local(var.name)
-        # del self.locals[self.current_block.name][var.name]
 
     def func(self, *args, **kwargs):
         func = irFunc(*args, **kwargs)
         self.funcs[func.name] = func
-        # self.locals[func.name] = {}
         self.current_func = func.name
         self.next_temp = 0 
 
@@ -1963,7 +1954,6 @@ class Builder(object):
         self.current_block.append_code(node)
 
     def get_current_node(self):
-        # return self.funcs[self.current_func].get_current_node()
         return self.current_block.code[-1]
 
     def ret(self, value, lineno=None):
@@ -3113,13 +3103,6 @@ class Builder(object):
 
                     self.data_table.append(i)
 
-            # for func_name, local in self.locals.items():
-            #     for i in local.values():
-            #         # assign func name to var
-            #         i.name = '%s.%s' % (func_name, i.name)
-
-            #         self.data_table.append(i)
-
         else:
             for block in self.blocks:
                 for i in block.locals.values():
@@ -3130,16 +3113,6 @@ class Builder(object):
                     i.name = '%s.%s' % (block.name, i.name)
 
                     self.data_table.append(i)
-
-            # for func_name, local in self.locals.items():
-            #     for i in local.values():
-            #         i.addr = addr
-            #         addr += i.length
-
-            #         # assign func name to var
-            #         i.name = '%s.%s' % (func_name, i.name)
-
-            #         self.data_table.append(i)
 
         # scan instructions for referenced string literals
         used_strings = []
